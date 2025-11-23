@@ -5,8 +5,7 @@ from dash import dcc, html
 import pandas as pd
 
 def render_page_content():
-    for ticker in pd.read_csv("data/historical_data.csv").columns:
-        y_values = pd.read_csv("data/historical_data.csv")[ticker].tolist()
+    df = pd.read_csv("data/historical_data.csv")
     return html.Div([
         html.Hr(),
         html.Div([
@@ -66,22 +65,24 @@ def render_page_content():
                 }
             )
         ], style=Styles.STYLE(46)),
+        html.Hr(),
         html.Div([
             dcc.Graph(
-                id='historical_performanace',
+                id='monte-carlo-portfolio-simulation',
                 figure={
                     'data': [
-                                {
-                                    'x': pd.read_csv("data/historical_data.csv").index.tolist(),
-                                    'y': pd.read_csv("data/historical_data.csv")[run],
-                                    'type': 'line',
-                                    'name': run,
-                                    'line': {'color': Styles.colorPalette[0], 'width': 4},
-                                    'showlegend': False
-                                } for run in pd.read_csv("data/historical_data.csv").columns
-                            ],
+                        {
+                            'x': df.index.tolist(),
+                            'y': df[run].tolist(),
+                            'type': 'scatter',
+                            'mode': 'markers',
+                            'marker': {'size': 3, 'color': Styles.colorPalette[3]},
+                            'name': run,
+                            'showlegend': True
+                        } for run in df.columns
+                    ],
                     'layout': {
-                        'title': 'Historical Performanace',
+                        'title': 'Monte Carlo Simulation Runs',
                         'xaxis': {'title': 'Year'},
                         'yaxis': {'title': 'Portfolio Value'},
                         'margin': {'t': 40, 'b': 40, 'l': 40, 'r': 40},
@@ -89,5 +90,6 @@ def render_page_content():
                 }
             )
         ], style=Styles.STYLE(100))
+
     ])
 
