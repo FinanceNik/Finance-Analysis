@@ -3,10 +3,8 @@ import Styles
 import dash
 from dash.dependencies import Input, Output
 from dash import dcc, html
-import pages.page_positions as page_sportsType
-import pages.page_about as page_about
 import dataLoadPositions as dlp
-from pages import page_positions, page_transactions
+from pages import page_positions, page_transactions, page_about, page_projections
 
 basePath = ''
 app = dash.Dash(__name__, suppress_callback_exceptions=True,
@@ -28,6 +26,7 @@ sidebar = html.Div(
             [
                 dbc.NavLink("Positions", href=f"{basePath}/", active="exact"),
                 dbc.NavLink("Transactions", href=f"{basePath}/transactions", active="exact"),
+                dbc.NavLink("Projections", href=f"{basePath}/projections", active="exact"),
                 dbc.NavLink("About This App", href=f"{basePath}/about", active="exact"),
             ],
             vertical=True,
@@ -56,6 +55,9 @@ def render_page_content(pathname):
 
     elif pathname == f"{basePath}/transactions":
         return page_transactions.render_page_content()
+
+    elif pathname == f"{basePath}/projections":
+        return page_projections.render_page_content()
 
     elif pathname == f"{basePath}/about":
         return page_about.render_page_content()

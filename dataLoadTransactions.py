@@ -74,39 +74,71 @@ def monthly_transaction_summary(
     return months, values
 
 
-def plot_dividends_comparison(year, transaction_type):
-    all_months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
-    width = 0.25  # narrower bars to fit 3 groups
+def total_transaction_amount(year: int, transaction_type: str | list[str]) -> float:
+    df = ingest_transactions()
+    if isinstance(transaction_type, str):
+        transaction_types = [transaction_type.lower()]
+    else:
+        transaction_types = [t.lower() for t in transaction_type]
 
-    # Gather data for each year
-    vals = []
-    labels = []
-    for y in range(year - 2, year + 1):
-        months, values = monthly_transaction_summary(y, transaction_type)
-        val_aligned = [values[months.index(m)] if m in months else 0 for m in all_months]
-        vals.append(val_aligned)
-        labels.append(str(y))
-
-    x = np.arange(len(all_months))
-
-    fig, ax = plt.subplots(figsize=(12, 6))
-
-    # Plot bars side by side for 3 years
-    for i, (val, label) in enumerate(zip(vals, labels)):
-        ax.bar(x + (i - 1) * width, val, width, label=label)
-
-    ax.set_xticks(x)
-    ax.set_xticklabels(all_months)
-    ax.set_xlabel('Month')
-    ax.set_ylabel(f'{transaction_type} Amount')
-    ax.set_title(f'Monthly {transaction_type}: Last 3 Years Comparison')
-    ax.legend()
-    ax.grid(axis='y')
-
-    plt.tight_layout()
-    plt.show()
+    filtered = df.loc[
+        (df['date'].dt.year == year) &
+        (df['transaction'].str.lower().isin(transaction_types))
+        ]
+    total = filtered['net_amount'].sum()
+    return round(total, 2)
 
 
-#print(ingest_transactions()["transaction"].unique())
+def average_transaction_amount(year: int, transaction_type: str | list[str]) -> float:
+    df = ingest_transactions()
+    if isinstance(transaction_type, str):
+        transaction_types = [transaction_type.lower()]
+    else:
+        transaction_types = [t.lower() for t in transaction_type]
 
-#plot_dividends_comparison(year=2025, transaction_type="Dividend")
+    filtered = df.loc[
+        (df['date'].dt.year == year) &
+        (df['transaction'].str.lower().isin(transaction_types))
+        ]
+    avg = filtered['net_amount'].mean()
+    return avg
+
+
+def count_transactions(year: int, transaction_type: str | list[str]) -> int:
+    df = ingest_transactions()
+    if isinstance(transaction_type, str):
+        transaction_types = [transaction_type.lower()]
+    else:
+        transaction_types = [t.lower() for t in transaction_type]
+
+    filtered = df.loc[
+        (df['date'].dt.year == year) &
+        (df['transaction'].str.lower().isin(transaction_types))
+        ]
+    count = filtered.shape[0]
+    return count
+
+def yearly_transaction_sum(year, transaction_type) -> float:
+    months, values = monthly_transaction_summary(year, transaction_type)
+    return round(sum(values), 2)
+
+
+def monthly_totals(transaction_type):
+    months_prev, values_prev = monthly_transaction_summary(currentYear - 1, transaction_type)
+    months_current, values_current = monthly_transaction_summary(currentYear, transaction_type)
+
+    dict_prev = dict(zip(months_prev, values_prev))
+    dict_current = dict(zip(months_current, values_current))
+
+    vals_prev = [dict_prev.get(m, 0) for m in months]
+    vals_current = [dict_current.get(m, 0) for m in months]
+
+    return months, vals_prev, vals_current
+
+
+
+
+def totals(transaction_type):
+    current_year_total = yearly_transaction_sum(currentYear, transaction_type)
+    prev_year_total = yearly_transaction_sum(currentYear - 1, transaction_type)
+    return [prev_year_total, current_year_total]
