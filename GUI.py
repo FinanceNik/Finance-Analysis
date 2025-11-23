@@ -5,6 +5,9 @@ from dash.dependencies import Input, Output
 from dash import dcc, html
 import dataLoadPositions as dlp
 from pages import page_positions, page_transactions, page_about, page_projections
+import fetchAPI
+
+fetchAPI.fetch_historical_data_yfinance()
 
 basePath = ''
 app = dash.Dash(__name__, suppress_callback_exceptions=True,

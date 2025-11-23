@@ -5,6 +5,26 @@ currentYear = int(datetime.today().strftime('%Y'))  # the current year
 months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 filepath = "data/Positions_1640083_22112025_07_30.csv"
 
+
+def get_asset_mapping() -> pd.DataFrame:
+    df = pd.read_csv("data/transactions-from-01012023-to-22112025.csv", sep=";")
+
+    # Standardize column names for safe access
+    df.columns = (
+        df.columns
+        .str.strip()
+        .str.lower()
+        .str.replace(" ", "_")
+        .str.replace("-", "_")
+        .str.replace("#", "number")
+        .str.replace("__", "_")
+    )
+    asset_df = df[['symbol', 'name', 'isin', 'currency']].dropna(subset=['symbol']).drop_duplicates()
+    asset_df = asset_df.reset_index(drop=True)
+
+    return asset_df
+
+
 def fetch_data():
     df = pd.read_csv(filepath, sep=",")
 

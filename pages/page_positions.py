@@ -1,8 +1,12 @@
 import Styles
 import dataLoadPositions as dlp
+import fetchAPI as fapi
 from dash import dcc, html
+import pandas as pd
 
 def render_page_content():
+    for ticker in pd.read_csv("data/historical_data.csv").columns:
+        y_values = pd.read_csv("data/historical_data.csv")[ticker].tolist()
     return html.Div([
         html.Hr(),
         html.Div([
@@ -61,7 +65,29 @@ def render_page_content():
                     }
                 }
             )
-        ], style=Styles.STYLE(46))
-
+        ], style=Styles.STYLE(46)),
+        html.Div([
+            dcc.Graph(
+                id='historical_performanace',
+                figure={
+                    'data': [
+                                {
+                                    'x': pd.read_csv("data/historical_data.csv").index.tolist(),
+                                    'y': pd.read_csv("data/historical_data.csv")[run],
+                                    'type': 'line',
+                                    'name': run,
+                                    'line': {'color': Styles.colorPalette[0], 'width': 4},
+                                    'showlegend': False
+                                } for run in pd.read_csv("data/historical_data.csv").columns
+                            ],
+                    'layout': {
+                        'title': 'Historical Performanace',
+                        'xaxis': {'title': 'Year'},
+                        'yaxis': {'title': 'Portfolio Value'},
+                        'margin': {'t': 40, 'b': 40, 'l': 40, 'r': 40},
+                    }
+                }
+            )
+        ], style=Styles.STYLE(100))
     ])
 
