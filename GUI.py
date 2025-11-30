@@ -4,7 +4,7 @@ import dash
 from dash.dependencies import Input, Output
 from dash import dcc, html
 import dataLoadPositions as dlp
-from pages import page_positions, page_transactions, page_about, page_projections
+from pages import page_positions, page_transactions, page_about, page_projections, page_realEstate
 import fetchAPI
 
 fetchAPI.fetch_historical_data_yfinance()
@@ -30,6 +30,7 @@ sidebar = html.Div(
                 dbc.NavLink("Positions", href=f"{basePath}/", active="exact"),
                 dbc.NavLink("Transactions", href=f"{basePath}/transactions", active="exact"),
                 dbc.NavLink("Projections", href=f"{basePath}/projections", active="exact"),
+                dbc.NavLink("Real Estate", href=f"{basePath}/real-estate", active="exact"),
                 dbc.NavLink("About This App", href=f"{basePath}/about", active="exact"),
             ],
             vertical=True,
@@ -61,6 +62,9 @@ def render_page_content(pathname):
 
     elif pathname == f"{basePath}/projections":
         return page_projections.render_page_content()
+
+    elif pathname == f"{basePath}/real-estate":
+        return page_realEstate.render_page_content()
 
     elif pathname == f"{basePath}/about":
         return page_about.render_page_content()
