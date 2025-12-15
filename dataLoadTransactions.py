@@ -6,7 +6,7 @@ months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 
 
 
 def ingest_transactions() -> pd.DataFrame:
-    df = pd.read_csv("data/transactions-from-01012023-to-22112025.csv", sep=";")
+    df = pd.read_csv("data/transactions-from-05122020-to-15122025.csv", sep=";")
     df.columns = (
         df.columns
         .str.strip()
@@ -45,6 +45,27 @@ def ingest_transactions() -> pd.DataFrame:
         df[col] = to_numeric(df[col])
 
     return df
+
+
+def yearly_transaction_summary():
+
+    df = ingest_transactions()
+    df = df.loc[df["transaction"]=="Dividend"]
+
+    # Extract year and group
+    df["year"] = df["date"].dt.year
+    grouped = (
+        df.groupby("year")["net_amount"]
+        .sum()
+        .round(2)
+        .sort_index()
+    )
+
+    # Lists for use elsewhere (plotting, reporting)
+    year_labels = [str(year) for year in grouped.index]
+    values = list(grouped.values)
+
+    return year_labels, values
 
 
 def monthly_transaction_summary(

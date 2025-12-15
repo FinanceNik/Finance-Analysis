@@ -21,6 +21,31 @@ def render_page_content():
         ]),
         html.Hr(),
         html.Div([
+            html.H4(f"Yearly Investments"),
+            dcc.Graph(
+                id='monthly-investment-bar',
+                figure={
+                    'data': [
+                        {
+                            'x': dlt.yearly_transaction_summary()[0],
+                            'y': dlt.yearly_transaction_summary()[1],
+                            'type': 'bar',
+                            'name': str(dlt.currentYear - 1),
+                            'marker': {'color': Styles.colorPalette[1]}
+                        },
+                    ],
+                    'layout': {
+                        'barmode': 'group',
+                        'title': 'Monthly Investment Comparison',
+                        'xaxis': {'title': 'Month'},
+                        'yaxis': {'title': 'Investments'},
+                        'margin': {'t': 40, 'b': 40, 'l': 40, 'r': 40},
+                    }
+                }
+            )
+        ], style=Styles.STYLE(100)),
+        html.Hr(),
+        html.Div([
             html.H4(f"Monthly Dividends: {dlt.currentYear - 1} vs {dlt.currentYear}"),
             dcc.Graph(
                 id='monthly-dividends-bar',
