@@ -110,13 +110,6 @@ def kpiboxes_spark(label_text, value, color, data_points=None):
                 pts.append(f"{x},{y}")
             polyline = f'<polyline points="{" ".join(pts)}" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="1.5" />'
             svg = f'<svg viewBox="0 0 {w} {h}" style="width:80px;height:24px;margin-top:4px;">{polyline}</svg>'
-            spark = html.Div(
-                dangerously_allow_html=False,
-                children=[],
-                style={"marginTop": "4px"},
-                **{"data-spark": True}
-            )
-            # Use Dash's html.Iframe workaround or just inline SVG via a raw div
             from dash import dcc
             spark = dcc.Markdown(
                 f'<div style="margin-top:4px">{svg}</div>',

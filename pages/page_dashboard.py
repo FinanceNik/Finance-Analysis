@@ -318,7 +318,14 @@ def layout():
     return_pct = dlp.portfolio_return_pct()
 
     # Net worth from settings + portfolio
-    saved_networth = user_settings.get("networth", 0) or 0
+    nw_data = user_settings.get("networth", {}) or {}
+    if isinstance(nw_data, dict):
+        assets = sum(v for k, v in nw_data.items()
+                     if isinstance(v, (int, float)) and k != "liabilities")
+        liabilities = nw_data.get("liabilities", 0) or 0
+        saved_networth = assets - liabilities
+    else:
+        saved_networth = nw_data if isinstance(nw_data, (int, float)) else 0
     net_worth = saved_networth + portfolio_value
 
     # Monthly savings from budget settings
