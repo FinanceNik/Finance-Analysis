@@ -1,84 +1,151 @@
-from dash import dcc, html
+from dash import dcc, html, Input, Output
 import Styles
 import dataLoadRealEstate as dlre
 
-def render_page_content():
 
-    starting_value = 350000
-    growth_rate = 0.03
-    costs = 1200 * 12
-    income = 1700 * 12
-    years = 20
-
-    df_real_estate = dlre.real_estate_projection(
-        starting_value=starting_value,
-        growth_rate=growth_rate,
-        costs=costs,
-        income=income,
-        years=years
-    )
+def layout():
     return html.Div([
         html.Hr(),
-        html.Div([
-            Styles.kpiboxes(f'Starting Value:',
-                            starting_value,
-                            Styles.colorPalette[0]),
-            Styles.kpiboxes(f'Annual Growth Rate:',
-                            growth_rate,
-                            Styles.colorPalette[1]),
-            Styles.kpiboxes(f'Annual Income:',
-                            income,
-                            Styles.colorPalette[2]),
-            Styles.kpiboxes(f'Annual Costs:',
-                            costs,
-                            Styles.colorPalette[3]),
-        ]),
-        html.Hr(),
-        html.Div([''], style=Styles.FILLER()),
-        html.Div([
-            dcc.Graph(
-                id='real-estate-bar-chart',
-                figure={
-                    'data': [
-                        # Costs - positioned at x - 0.4 (left)
-                        {
-                            'x': df_real_estate.index.tolist(),
-                            'y': df_real_estate['costs'].tolist(),
-                            'type': 'bar',
-                            'name': 'Costs',
-                            'width': 0.25,
-                            'marker': {'color': 'red'}
-                        },
-                        # Income - positioned at x + 0.4 (middle)
-                        {
-                            'x': df_real_estate.index.tolist(),
-                            'y': df_real_estate['income'].tolist(),
-                            'type': 'bar',
-                            'name': 'Income',
-                            'width': 0.25,
-                            'marker': {'color': 'green'}
-                        },
-                        # Asset Value - positioned at x 0 (right, secondary axis)
-                        {
-                            'x': df_real_estate.index.tolist(),
-                            'y': df_real_estate['asset_value_with_appreciation'].tolist(),
-                            'type': 'bar',
-                            'name': 'Asset Value',
-                            'width': 0.25,
-                            'marker': {'color': Styles.colorPalette[0]}
-                        },
-                    ],
-                    'layout': {
-                        'title': 'Real Estate Projection Over Time',
-                        'xaxis': {'title': 'Year'},
-                        'yaxis': {
-                            'title': 'Costs & Income (CHF)',
-                            'side': 'left'
-                        },
-                        'margin': {'t': 40, 'b': 40, 'l': 40, 'r': 40},
-                    }
-                }
-            )
+        html.H4("Real Estate Investment Projection"),
 
+        # --- Input controls ---
+        html.Div([
+            html.Div([
+                html.Label("Property Value (CHF)"),
+                dcc.Input(
+                    id="re-starting-value", type="number",
+                    value=350000, step=10000, min=50000,
+                    style={"width": "100%", "padding": "6px"}
+                ),
+            ], style={"width": "18%", "display": "inline-block", "padding": "10px 15px"}),
+
+            html.Div([
+                html.Label("Annual Growth Rate (%)"),
+                dcc.Slider(
+                    id="re-growth-rate",
+                    min=0, max=8, step=0.5, value=3,
+                    marks={i: f"{i}%" for i in range(0, 9)},
+                    tooltip={"placement": "bottom", "always_visible": True},
+                ),
+            ], style={"width": "25%", "display": "inline-block", "padding": "10px 15px"}),
+
+            html.Div([
+                html.Label("Monthly Rental Income (CHF)"),
+                dcc.Input(
+                    id="re-income", type="number",
+                    value=1700, step=100, min=0,
+                    style={"width": "100%", "padding": "6px"}
+                ),
+            ], style={"width": "18%", "display": "inline-block", "padding": "10px 15px"}),
+
+            html.Div([
+                html.Label("Monthly Costs (CHF)"),
+                dcc.Input(
+                    id="re-costs", type="number",
+                    value=1200, step=100, min=0,
+                    style={"width": "100%", "padding": "6px"}
+                ),
+            ], style={"width": "18%", "display": "inline-block", "padding": "10px 15px"}),
+
+            html.Div([
+                html.Label("Projection Years"),
+                dcc.Slider(
+                    id="re-years",
+                    min=5, max=40, step=5, value=20,
+                    marks={i: f"{i}y" for i in range(5, 41, 5)},
+                    tooltip={"placement": "bottom", "always_visible": True},
+                ),
+            ], style={"width": "18%", "display": "inline-block", "padding": "10px 15px"}),
+        ], style={"marginBottom": "10px"}),
+
+        # --- KPI boxes (dynamic) ---
+        html.Div(id="re-kpi-boxes"),
+        html.Hr(),
+
+        # --- Chart ---
+        html.Div([
+            dcc.Loading(
+                dcc.Graph(id='re-projection-chart'),
+                type="circle",
+            )
         ], style=Styles.STYLE(100))
     ])
+
+
+def register_callbacks(app):
+    @app.callback(
+        [Output("re-kpi-boxes", "children"),
+         Output("re-projection-chart", "figure")],
+        [Input("re-starting-value", "value"),
+         Input("re-growth-rate", "value"),
+         Input("re-income", "value"),
+         Input("re-costs", "value"),
+         Input("re-years", "value")]
+    )
+    def update_real_estate(starting_value, growth_rate, monthly_income, monthly_costs, years):
+        starting_value = starting_value or 350000
+        growth_rate = (growth_rate or 3) / 100.0
+        monthly_income = monthly_income or 1700
+        monthly_costs = monthly_costs or 1200
+        years = years or 20
+
+        annual_income = monthly_income * 12
+        annual_costs = monthly_costs * 12
+
+        df = dlre.real_estate_projection(
+            starting_value=starting_value,
+            growth_rate=growth_rate,
+            costs=annual_costs,
+            income=annual_income,
+            years=years
+        )
+
+        final_value = df['asset_value_with_appreciation'].iloc[-1]
+        total_appreciation = final_value - starting_value
+        total_income = annual_income * years
+        total_costs = annual_costs * years
+        net_profit = total_appreciation + total_income - total_costs
+
+        kpis = html.Div([
+            Styles.kpiboxes('Property Value:', f"{starting_value:,.0f}", Styles.colorPalette[0]),
+            Styles.kpiboxes('Annual Net Cash Flow:', f"{annual_income - annual_costs:,.0f}", Styles.colorPalette[1]),
+            Styles.kpiboxes(f'Value After {years}y:', f"{final_value:,.0f}", Styles.colorPalette[2]),
+            Styles.kpiboxes(f'Total Net Profit:', f"{net_profit:,.0f}", Styles.colorPalette[3]),
+        ])
+
+        figure = {
+            'data': [
+                {
+                    'x': df.index.tolist(),
+                    'y': df['costs'].tolist(),
+                    'type': 'bar',
+                    'name': 'Cumulative Costs',
+                    'width': 0.25,
+                    'marker': {'color': 'red'}
+                },
+                {
+                    'x': df.index.tolist(),
+                    'y': df['income'].tolist(),
+                    'type': 'bar',
+                    'name': 'Cumulative Income',
+                    'width': 0.25,
+                    'marker': {'color': 'green'}
+                },
+                {
+                    'x': df.index.tolist(),
+                    'y': df['asset_value_with_appreciation'].tolist(),
+                    'type': 'bar',
+                    'name': 'Asset Value',
+                    'width': 0.25,
+                    'marker': {'color': Styles.colorPalette[0]}
+                },
+            ],
+            'layout': {
+                'title': f'Real Estate Projection Over {years} Years',
+                'xaxis': {'title': 'Year'},
+                'yaxis': {'title': 'CHF'},
+                'margin': {'t': 40, 'b': 40, 'l': 60, 'r': 40},
+            }
+        }
+
+        return kpis, figure

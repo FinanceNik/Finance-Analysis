@@ -19,7 +19,8 @@ idna==3.4
 itsdangerous==2.1.2
 kiwisolver==1.4.4
 MarkupSafe==2.1.1
-#numpy==1.23.5
+numpy==1.23.5
+yfinance
 outcome==1.2.0
 packaging==22.0
 pandas==2.3.1
