@@ -1,6 +1,117 @@
 import Styles
 import dataLoadTransactions as dlt
+import dataLoadPositions as dlp
 from dash import dcc, html
+
+
+def _build_dividend_analysis():
+    """Build dividend income analysis section."""
+    txn = dlt.ingest_transactions()
+    if txn.empty or "transaction" not in txn.columns:
+        return html.Div()
+
+    dividends = txn[txn["transaction"].str.lower() == "dividend"].copy()
+    if dividends.empty:
+        return html.Div()
+
+    # Dividend by symbol
+    if "symbol" in dividends.columns and "net_amount" in dividends.columns:
+        by_symbol = dividends.groupby("symbol")["net_amount"].sum().sort_values(ascending=True)
+
+        div_by_symbol_chart = {
+            'data': [{
+                'type': 'bar',
+                'x': by_symbol.values.round(2).tolist(),
+                'y': by_symbol.index.tolist(),
+                'orientation': 'h',
+                'marker': {'color': Styles.strongGreen},
+                'text': [f"{v:,.0f}" for v in by_symbol.values],
+                'textposition': 'outside',
+            }],
+            'layout': {
+                'title': 'Total Dividends Received by Holding',
+                'xaxis': {'title': 'Total Dividends'},
+                'margin': {'t': 40, 'b': 40, 'l': 120, 'r': 60},
+                'height': max(250, len(by_symbol) * 28),
+            }
+        }
+    else:
+        div_by_symbol_chart = {'data': [], 'layout': {'title': 'No symbol data'}}
+
+    # Monthly dividend trend (all years)
+    div_trend_chart = {'data': [], 'layout': {'title': 'No date data'}}
+    if "date" in dividends.columns:
+        dividends["year_month"] = dividends["date"].dt.to_period("M").astype(str)
+        monthly = dividends.groupby("year_month")["net_amount"].sum().reset_index()
+
+        div_trend_chart = {
+            'data': [{
+                'x': monthly["year_month"].tolist(),
+                'y': monthly["net_amount"].round(2).tolist(),
+                'type': 'bar',
+                'marker': {'color': Styles.strongGreen},
+                'name': 'Monthly Dividends',
+            }],
+            'layout': {
+                'title': 'Monthly Dividend Income Over Time',
+                'xaxis': {'title': 'Month'},
+                'yaxis': {'title': 'Dividend Income'},
+                'margin': {'t': 40, 'b': 60, 'l': 60, 'r': 40},
+            }
+        }
+
+    # Dividend yield estimate
+    positions = dlp.fetch_data()
+    yield_section = html.Div()
+    if not positions.empty and "symbol" in positions.columns and "total_value" in positions.columns:
+        annual_divs = dividends[dividends["date"].dt.year == dlt.currentYear].groupby("symbol")["net_amount"].sum()
+        if annual_divs.sum() == 0:
+            annual_divs = dividends[dividends["date"].dt.year == dlt.currentYear - 1].groupby("symbol")["net_amount"].sum()
+
+        pos_values = positions.set_index("symbol")["total_value"]
+        yields = (annual_divs / pos_values).dropna()
+        yields = yields[yields > 0].sort_values(ascending=True)
+
+        if not yields.empty:
+            yield_chart = {
+                'data': [{
+                    'type': 'bar',
+                    'x': (yields * 100).round(2).tolist(),
+                    'y': yields.index.tolist(),
+                    'orientation': 'h',
+                    'marker': {'color': Styles.colorPalette[2]},
+                    'text': [f"{v:.2f}%" for v in (yields * 100)],
+                    'textposition': 'outside',
+                }],
+                'layout': {
+                    'title': 'Estimated Dividend Yield by Holding',
+                    'xaxis': {'title': 'Yield (%)'},
+                    'margin': {'t': 40, 'b': 40, 'l': 120, 'r': 60},
+                    'height': max(250, len(yields) * 28),
+                }
+            }
+            yield_section = html.Div([
+                dcc.Graph(id='dividend-yield-chart', figure=yield_chart)
+            ], style=Styles.STYLE(48))
+
+    return html.Div([
+        html.Hr(),
+        html.H4("Dividend Income Analysis"),
+        html.Div([
+            html.Div([
+                dcc.Graph(id='div-trend-chart', figure=div_trend_chart)
+            ], style=Styles.STYLE(100)),
+        ]),
+        html.Hr(),
+        html.Div([
+            html.Div([
+                dcc.Graph(id='div-by-symbol-chart', figure=div_by_symbol_chart)
+            ], style=Styles.STYLE(48)),
+            html.Div([''], style=Styles.FILLER()),
+            yield_section,
+        ]),
+    ])
+
 
 def render_page_content():
     return html.Div([
@@ -21,24 +132,24 @@ def render_page_content():
         ]),
         html.Hr(),
         html.Div([
-            html.H4(f"Yearly Investments"),
+            html.H4(f"Yearly Dividends"),
             dcc.Graph(
-                id='monthly-investment-bar',
+                id='yearly-dividend-overview-bar',
                 figure={
                     'data': [
                         {
                             'x': dlt.yearly_transaction_summary()[0],
                             'y': dlt.yearly_transaction_summary()[1],
                             'type': 'bar',
-                            'name': str(dlt.currentYear - 1),
+                            'name': 'Yearly',
                             'marker': {'color': Styles.colorPalette[1]}
                         },
                     ],
                     'layout': {
                         'barmode': 'group',
-                        'title': 'Monthly Investment Comparison',
-                        'xaxis': {'title': 'Month'},
-                        'yaxis': {'title': 'Investments'},
+                        'title': 'Yearly Dividend Summary',
+                        'xaxis': {'title': 'Year'},
+                        'yaxis': {'title': 'Total'},
                         'margin': {'t': 40, 'b': 40, 'l': 40, 'r': 40},
                     }
                 }
@@ -75,7 +186,7 @@ def render_page_content():
                     }
                 }
             )
-        ],style=Styles.STYLE(80)),
+        ], style=Styles.STYLE(80)),
         html.Div([''], style=Styles.FILLER()),
         html.Div([
             html.H4(f"Annual"),
@@ -98,13 +209,13 @@ def render_page_content():
                     }
                 }
             )
-        ],style=Styles.STYLE(18)),
+        ], style=Styles.STYLE(18)),
         # --------------------------------------------------------------------------------------------------------------
         html.Hr(),
         html.Div([
             html.H4(f"Monthly Investments: {dlt.currentYear - 1} vs {dlt.currentYear}"),
             dcc.Graph(
-                id='monthly-investment-bar',
+                id='monthly-investment-comparison-bar',
                 figure={
                     'data': [
                         {
@@ -154,6 +265,8 @@ def render_page_content():
                     }
                 }
             )
-        ], style=Styles.STYLE(18))
-    ])
+        ], style=Styles.STYLE(18)),
 
+        # Dividend analysis section
+        _build_dividend_analysis(),
+    ])

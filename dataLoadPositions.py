@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 currentYear = int(datetime.today().strftime('%Y'))
 months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
-_transactions_filepath = "data/transactions-from-01012023-to-22112025.csv"
+_transactions_filepath = "data/transactions-from-30122022-to-09012026.csv"
 
 
 def _find_latest_positions_file() -> str:

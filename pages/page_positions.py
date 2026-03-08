@@ -1,12 +1,49 @@
 import base64
-import io
+import os
 import Styles
 import dataLoadPositions as dlp
-from dash import dcc, html, Input, Output, State
+from dash import dcc, html, Input, Output, State, dash_table
 import pandas as pd
 
 
+def _build_holdings_table(df):
+    """Build an interactive DataTable of all holdings."""
+    if df.empty:
+        return html.P("No holdings data available.")
+
+    display_cols = []
+    col_names = {
+        "symbol": "Symbol", "name": "Name", "asset_type": "Type",
+        "quantity": "Qty", "price": "Price", "unit_cost": "Cost",
+        "total_value": "Value", "currency": "CCY", "geography": "Geo",
+    }
+    for col, label in col_names.items():
+        if col in df.columns:
+            display_cols.append({"name": label, "id": col,
+                                 "type": "numeric" if col in ("quantity", "price", "unit_cost", "total_value") else "text"})
+
+    table_data = df.to_dict("records")
+
+    return dash_table.DataTable(
+        id="holdings-table",
+        columns=display_cols,
+        data=table_data,
+        sort_action="native",
+        filter_action="native",
+        page_size=20,
+        style_table={"overflowX": "auto"},
+        style_cell={"padding": "8px", "textAlign": "left", "fontSize": "14px"},
+        style_header={"backgroundColor": Styles.colorPalette[0], "color": "white",
+                       "fontWeight": "bold", "fontSize": "14px"},
+        style_data_conditional=[
+            {"if": {"row_index": "odd"}, "backgroundColor": "#f9f9f9"},
+        ],
+    )
+
+
 def layout():
+    df = dlp.fetch_data()
+
     return html.Div([
         html.Hr(),
 
@@ -34,18 +71,25 @@ def layout():
         # --- KPI boxes ---
         html.Div([
             Styles.kpiboxes('Total Value:',
-                            dlp.portfolio_total_value(),
+                            f"{dlp.portfolio_total_value():,}",
                             Styles.colorPalette[0]),
             Styles.kpiboxes('Total Pur.-Cost:',
-                            dlp.portfolio_cost_basis(),
+                            f"{dlp.portfolio_cost_basis():,}",
                             Styles.colorPalette[1]),
             Styles.kpiboxes('Total Unr. Gains:',
-                            dlp.portfolio_unrealized_pnl(),
+                            f"{dlp.portfolio_unrealized_pnl():,}",
                             Styles.colorPalette[2]),
             Styles.kpiboxes('Total % Return:',
-                            dlp.portfolio_return_pct(),
+                            f"{dlp.portfolio_return_pct():.1%}",
                             Styles.colorPalette[3]),
         ]),
+        html.Hr(),
+
+        # --- Interactive Holdings Table ---
+        html.H4("Holdings"),
+        html.Div([
+            _build_holdings_table(df),
+        ], style={**Styles.STYLE(100), "marginBottom": "20px"}),
         html.Hr(),
 
         # --- Charts row ---
@@ -133,12 +177,13 @@ def register_callbacks(app):
         try:
             content_type, content_string = contents.split(',')
             decoded = base64.b64decode(content_string)
-            if filename.endswith('.csv'):
-                save_path = f"data/{filename}"
+            safe_name = os.path.basename(filename)
+            if safe_name.endswith('.csv'):
+                save_path = os.path.join("data", safe_name)
                 with open(save_path, 'wb') as f:
                     f.write(decoded)
                 dlp.set_positions_filepath(save_path)
-                return f"Uploaded: {filename}. Refresh the page to see updated data."
+                return f"Uploaded: {safe_name}. Refresh the page to see updated data."
             else:
                 return "Please upload a CSV file."
         except Exception as e:
@@ -154,20 +199,24 @@ def register_callbacks(app):
         except FileNotFoundError:
             return {'data': [], 'layout': {'title': 'No historical data available'}}
 
+        # Use date column if present, otherwise fall back to index
+        x_values = df["date"].tolist() if "date" in df.columns else df.index.tolist()
+        data_cols = [c for c in df.columns if c != "date"]
+
         traces = [
             {
-                'x': df.index.tolist(),
+                'x': x_values,
                 'y': df[col].tolist(),
                 'type': 'scatter',
                 'mode': 'lines',
                 'name': col,
-            } for col in df.columns
+            } for col in data_cols
         ]
         return {
             'data': traces,
             'layout': {
                 'title': 'Historical Prices (log scale)',
-                'xaxis': {'title': 'Trading Day'},
+                'xaxis': {'title': 'Date', 'type': 'date' if 'date' in df.columns else 'linear'},
                 'yaxis': {'title': 'Log Price'},
                 'margin': {'t': 40, 'b': 40, 'l': 40, 'r': 40},
             }

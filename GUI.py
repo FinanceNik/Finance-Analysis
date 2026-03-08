@@ -4,7 +4,9 @@ import dash
 from dash.dependencies import Input, Output, State
 from dash import dcc, html
 import dataLoadPositions as dlp
-from pages import page_positions, page_transactions, page_about, page_projections, page_realEstate, page_analytics
+from pages import (page_positions, page_transactions, page_about,
+                   page_projections, page_realEstate, page_analytics,
+                   page_networth, page_goals, page_rebalancing, page_taxlots)
 import fetchAPI
 
 fetchAPI.fetch_historical_data_yfinance()
@@ -16,7 +18,7 @@ app = dash.Dash(__name__, suppress_callback_exceptions=True,
 
 sidebar = html.Div(
     [
-        html.H1(f"Your {dlp.currentYear}\n in Review", style={'fontSize': '36px', 'fontWeight': 'bold'}),
+        html.H1(f"Wealth\nAnalysis", style={'fontSize': '32px', 'fontWeight': 'bold'}),
         html.Hr(style={'borderColor': Styles.greys[3]}),
         dbc.Switch(
             id="theme-switch",
@@ -26,11 +28,15 @@ sidebar = html.Div(
         html.Hr(style={'borderColor': Styles.greys[3]}),
         dbc.Nav(
             [
+                dbc.NavLink("Net Worth", href=f"{basePath}/net-worth", active="exact"),
                 dbc.NavLink("Positions", href=f"{basePath}/", active="exact"),
                 dbc.NavLink("Transactions", href=f"{basePath}/transactions", active="exact"),
+                dbc.NavLink("Analytics", href=f"{basePath}/analytics", active="exact"),
                 dbc.NavLink("Projections", href=f"{basePath}/projections", active="exact"),
                 dbc.NavLink("Real Estate", href=f"{basePath}/real-estate", active="exact"),
-                dbc.NavLink("Analytics", href=f"{basePath}/analytics", active="exact"),
+                dbc.NavLink("Rebalancing", href=f"{basePath}/rebalancing", active="exact"),
+                dbc.NavLink("Tax Lots", href=f"{basePath}/tax-lots", active="exact"),
+                dbc.NavLink("Goals", href=f"{basePath}/goals", active="exact"),
                 dbc.NavLink("About", href=f"{basePath}/about", active="exact"),
             ],
             vertical=True,
@@ -83,6 +89,18 @@ def render_page_content(pathname):
     elif pathname == f"{basePath}/analytics":
         return page_analytics.layout()
 
+    elif pathname == f"{basePath}/net-worth":
+        return page_networth.layout()
+
+    elif pathname == f"{basePath}/goals":
+        return page_goals.layout()
+
+    elif pathname == f"{basePath}/rebalancing":
+        return page_rebalancing.layout()
+
+    elif pathname == f"{basePath}/tax-lots":
+        return page_taxlots.layout()
+
     elif pathname == f"{basePath}/about":
         return page_about.render_page_content()
 
@@ -91,6 +109,9 @@ def render_page_content(pathname):
 page_projections.register_callbacks(app)
 page_realEstate.register_callbacks(app)
 page_positions.register_callbacks(app)
+page_networth.register_callbacks(app)
+page_goals.register_callbacks(app)
+page_rebalancing.register_callbacks(app)
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=8080, debug=False)
