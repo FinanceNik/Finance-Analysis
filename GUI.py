@@ -6,7 +6,7 @@ from dash import dcc, html
 from datetime import datetime
 import dataLoadPositions as dlp
 import dataLoadTransactions as dlt
-from pages import (page_positions, page_transactions, page_about,
+from pages import (page_positions, page_transactions, page_about,  # noqa: E501
                    page_projections, page_realEstate, page_analytics,
                    page_networth, page_goals, page_rebalancing, page_taxlots,
                    page_budget, page_dashboard, page_scenarios, page_income,
@@ -209,6 +209,7 @@ page_rebalancing.register_callbacks(app)
 page_budget.register_callbacks(app)
 page_taxlots.register_callbacks(app)
 page_scenarios.register_callbacks(app)
+page_transactions.register_callbacks(app)
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=8080, debug=False)
