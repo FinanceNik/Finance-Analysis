@@ -10,7 +10,15 @@ logger = logging.getLogger(__name__)
 currentYear = int(datetime.today().strftime('%Y'))
 months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
-_transactions_filepath = "data/transactions-from-30122022-to-09012026.csv"
+def _find_latest_transactions_file() -> str:
+    """Find the most recent transactions CSV in the data directory."""
+    files = glob.glob("data/transactions-from-*.csv")
+    if not files:
+        return ""
+    return max(files, key=os.path.getmtime)
+
+
+_transactions_filepath = _find_latest_transactions_file()
 
 
 def _find_latest_positions_file() -> str:
@@ -156,7 +164,7 @@ def get_asset_mapping() -> pd.DataFrame:
         logger.warning("Transactions file not found: %s", _transactions_filepath)
         return pd.DataFrame()
 
-    df = pd.read_csv(_transactions_filepath, sep=";")
+    df = pd.read_csv(_transactions_filepath, sep=";", encoding="latin-1")
     df = _standardize_columns(df)
     asset_df = df[['symbol', 'name', 'isin', 'currency']].dropna(subset=['symbol']).drop_duplicates()
     asset_df = asset_df.reset_index(drop=True)
