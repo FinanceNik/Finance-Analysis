@@ -6,7 +6,8 @@ from dash import dcc, html
 import dataLoadPositions as dlp
 from pages import (page_positions, page_transactions, page_about,
                    page_projections, page_realEstate, page_analytics,
-                   page_networth, page_goals, page_rebalancing, page_taxlots)
+                   page_networth, page_goals, page_rebalancing, page_taxlots,
+                   page_budget)
 import fetchAPI
 
 fetchAPI.fetch_historical_data_yfinance()
@@ -35,6 +36,7 @@ sidebar = html.Div(
                 dbc.NavLink("Projections", href=f"{basePath}/projections", active="exact"),
                 dbc.NavLink("Real Estate", href=f"{basePath}/real-estate", active="exact"),
                 dbc.NavLink("Rebalancing", href=f"{basePath}/rebalancing", active="exact"),
+                dbc.NavLink("Budget", href=f"{basePath}/budget", active="exact"),
                 dbc.NavLink("Tax Lots", href=f"{basePath}/tax-lots", active="exact"),
                 dbc.NavLink("Goals", href=f"{basePath}/goals", active="exact"),
                 dbc.NavLink("About", href=f"{basePath}/about", active="exact"),
@@ -99,6 +101,9 @@ def render_page_content(pathname):
     elif pathname == f"{basePath}/rebalancing":
         return page_rebalancing.layout()
 
+    elif pathname == f"{basePath}/budget":
+        return page_budget.layout()
+
     elif pathname == f"{basePath}/tax-lots":
         return page_taxlots.layout()
 
@@ -113,6 +118,7 @@ page_positions.register_callbacks(app)
 page_networth.register_callbacks(app)
 page_goals.register_callbacks(app)
 page_rebalancing.register_callbacks(app)
+page_budget.register_callbacks(app)
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=8080, debug=False)
