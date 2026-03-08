@@ -3,11 +3,14 @@ import Styles
 import dash
 from dash.dependencies import Input, Output, State
 from dash import dcc, html
+from datetime import datetime
 import dataLoadPositions as dlp
+import dataLoadTransactions as dlt
 from pages import (page_positions, page_transactions, page_about,
                    page_projections, page_realEstate, page_analytics,
                    page_networth, page_goals, page_rebalancing, page_taxlots,
-                   page_budget, page_dashboard, page_scenarios, page_income)
+                   page_budget, page_dashboard, page_scenarios, page_income,
+                   page_currency, page_dividends)
 import fetchAPI
 
 fetchAPI.fetch_historical_data_yfinance()
@@ -16,6 +19,7 @@ basePath = ''
 app = dash.Dash(__name__, suppress_callback_exceptions=True,
                 external_stylesheets=[dbc.themes.BOOTSTRAP],
                 url_base_pathname='/', assets_folder='assets')
+
 
 def _nav_section(title, links):
     """Create a labeled navigation section."""
@@ -34,6 +38,14 @@ sidebar = html.Div(
             label="Dark mode",
             value=False,
         ),
+        html.Div([
+            html.Button("Refresh Data", id="refresh-btn", className="sidebar-btn"),
+            html.Button("Export PDF", id="export-pdf-btn", className="sidebar-btn-outline"),
+            html.Div(id="refresh-status", style={
+                "fontSize": "11px", "color": "var(--text-muted)",
+                "marginTop": "4px", "textAlign": "center",
+            }),
+        ], style={"marginTop": "10px"}),
         html.Hr(),
         _nav_section("Overview", [
             dbc.NavLink("Dashboard", href=f"{basePath}/", active="exact"),
@@ -43,12 +55,14 @@ sidebar = html.Div(
             dbc.NavLink("Positions", href=f"{basePath}/positions", active="exact"),
             dbc.NavLink("Analytics", href=f"{basePath}/analytics", active="exact"),
             dbc.NavLink("Transactions", href=f"{basePath}/transactions", active="exact"),
+            dbc.NavLink("Currency", href=f"{basePath}/currency", active="exact"),
             dbc.NavLink("Tax Lots", href=f"{basePath}/tax-lots", active="exact"),
             dbc.NavLink("Rebalancing", href=f"{basePath}/rebalancing", active="exact"),
         ]),
         _nav_section("Income", [
             dbc.NavLink("Budget", href=f"{basePath}/budget", active="exact"),
             dbc.NavLink("Income Statement", href=f"{basePath}/income-statement", active="exact"),
+            dbc.NavLink("Dividends", href=f"{basePath}/dividends", active="exact"),
         ]),
         _nav_section("Planning", [
             dbc.NavLink("Projections", href=f"{basePath}/projections", active="exact"),
@@ -70,6 +84,7 @@ content = html.Div(id="page-content", style=Styles.CONTENT_STYLE)
 app.layout = html.Div(
     [dcc.Location(id="url", refresh=False),
      dcc.Store(id="theme-store", storage_type='session'),
+     html.Button("\u2630", id="mobile-menu-btn", className="mobile-menu-btn"),
      sidebar,
      content
      ], id="main-layout"
@@ -88,6 +103,48 @@ def toggle_dark_mode(dark_mode):
     if dark_mode:
         return Styles.SIDEBAR_STYLE_DARK, Styles.CONTENT_STYLE_DARK, "dark-mode", True
     return Styles.SIDEBAR_STYLE, Styles.CONTENT_STYLE, "", False
+
+
+# --- Mobile sidebar toggle ---
+@app.callback(
+    Output("sidebar", "className"),
+    [Input("mobile-menu-btn", "n_clicks")],
+    [State("sidebar", "className")],
+    prevent_initial_call=True
+)
+def toggle_sidebar(n_clicks, current_class):
+    if current_class and "sidebar-open" in current_class:
+        return ""
+    return "sidebar-open"
+
+
+# --- Data refresh ---
+@app.callback(
+    Output("refresh-status", "children"),
+    [Input("refresh-btn", "n_clicks")],
+    prevent_initial_call=True
+)
+def refresh_data(n_clicks):
+    if not n_clicks:
+        return ""
+    dlp.fetch_data.cache_clear()
+    dlt.ingest_transactions.cache_clear()
+    fetchAPI.fetch_historical_data_yfinance()
+    return f"Refreshed {datetime.now().strftime('%H:%M:%S')}"
+
+
+# --- PDF export (client-side) ---
+app.clientside_callback(
+    """
+    function(n_clicks) {
+        if (n_clicks) { window.print(); }
+        return '';
+    }
+    """,
+    Output("export-pdf-btn", "title"),
+    [Input("export-pdf-btn", "n_clicks")],
+    prevent_initial_call=True
+)
 
 
 # --- Page routing ---
@@ -132,6 +189,12 @@ def render_page_content(pathname):
     elif pathname == f"{basePath}/income-statement":
         return page_income.layout()
 
+    elif pathname == f"{basePath}/currency":
+        return page_currency.layout()
+
+    elif pathname == f"{basePath}/dividends":
+        return page_dividends.layout()
+
     elif pathname == f"{basePath}/about":
         return page_about.render_page_content()
 
@@ -144,6 +207,7 @@ page_networth.register_callbacks(app)
 page_goals.register_callbacks(app)
 page_rebalancing.register_callbacks(app)
 page_budget.register_callbacks(app)
+page_taxlots.register_callbacks(app)
 page_scenarios.register_callbacks(app)
 
 if __name__ == "__main__":

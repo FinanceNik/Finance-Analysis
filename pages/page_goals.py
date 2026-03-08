@@ -68,6 +68,19 @@ def _build_goal_card(goal, idx):
         f"{years_to_go:.1f} years to go" if years_to_go is not None else "No monthly contribution set"
     )
 
+    # Milestone markers at 25%, 50%, 75%, 100%
+    milestones = []
+    for ms in [0.25, 0.50, 0.75, 1.0]:
+        reached = pct >= ms
+        milestones.append(html.Div(
+            className=f"milestone-dot {'reached' if reached else 'pending'}",
+            style={"left": f"{ms * 100}%"},
+        ))
+
+    celebration = html.Div()
+    if pct >= 1.0:
+        celebration = html.Div("Goal Reached!", className="goal-reached-badge")
+
     return html.Div([
         html.Div([
             html.H5(name, style={"margin": "0 0 5px 0"}),
@@ -79,6 +92,7 @@ def _build_goal_card(goal, idx):
                     "borderRadius": "12px",
                     "transition": "width 0.3s",
                 }),
+                *milestones,
             ], className="progress-track"),
             html.Div([
                 html.Span(f"{current:,.0f} / {target:,.0f}  ({pct:.0%})",
@@ -86,6 +100,7 @@ def _build_goal_card(goal, idx):
                 html.Span(f"  |  {status_text}",
                           style={"fontSize": "13px", "color": "#666"}),
             ]),
+            celebration,
         ], style={"padding": "15px"}),
     ], className="card", style={
         "width": "30%",

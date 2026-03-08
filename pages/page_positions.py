@@ -16,6 +16,7 @@ def _build_holdings_table(df):
         "symbol": "Symbol", "name": "Name", "asset_type": "Type",
         "quantity": "Qty", "price": "Price", "unit_cost": "Cost",
         "total_value": "Value", "currency": "CCY", "geography": "Geo",
+        "account_id": "Account",
     }
     for col, label in col_names.items():
         if col in df.columns:
@@ -43,110 +44,49 @@ def _build_holdings_table(df):
 
 
 def layout():
-    df = dlp.fetch_data()
+    account_ids = dlp.get_all_account_ids()
+    account_options = [{"label": "All Accounts", "value": "ALL"}] + [
+        {"label": f"Account {aid}", "value": aid} for aid in account_ids
+    ]
 
     return html.Div([
         html.Hr(),
 
-        # --- File upload ---
+        # --- Account filter + File upload row ---
         html.Div([
-            dcc.Upload(
-                id='upload-positions',
-                children=html.Div([
-                    'Drag & Drop or ',
-                    html.A('Select a Positions CSV', style={'fontWeight': 'bold', 'cursor': 'pointer'})
-                ]),
-                style={
-                    'width': '100%', 'height': '50px', 'lineHeight': '50px',
-                    'borderWidth': '1px', 'borderStyle': 'dashed',
-                    'borderRadius': '12px', 'textAlign': 'center',
-                    'margin': '10px 0'
-                },
-                multiple=False
-            ),
-            html.Div(id='upload-status', style={'color': 'green', 'fontSize': '14px'}),
+            html.Div([
+                html.Label("Account"),
+                dcc.Dropdown(
+                    id="account-filter",
+                    options=account_options,
+                    value="ALL",
+                    clearable=False,
+                    style={"width": "200px"},
+                ),
+            ], style={"display": "inline-block", "verticalAlign": "top", "padding": "10px 15px"}),
+            html.Div([
+                dcc.Upload(
+                    id='upload-positions',
+                    children=html.Div([
+                        'Drag & Drop or ',
+                        html.A('Select a Positions CSV', style={'fontWeight': 'bold', 'cursor': 'pointer'})
+                    ]),
+                    style={
+                        'width': '100%', 'height': '50px', 'lineHeight': '50px',
+                        'borderWidth': '1px', 'borderStyle': 'dashed',
+                        'borderRadius': '12px', 'textAlign': 'center',
+                    },
+                    multiple=False
+                ),
+                html.Div(id='upload-status', style={'color': 'green', 'fontSize': '14px'}),
+            ], style={"display": "inline-block", "width": "60%", "verticalAlign": "top", "padding": "10px 15px"}),
         ]),
 
         html.Hr(),
 
-        # --- KPI boxes ---
-        html.Div([
-            Styles.kpiboxes('Total Value',
-                            f"{dlp.portfolio_total_value():,}",
-                            Styles.colorPalette[0]),
-            Styles.kpiboxes('Total Pur.-Cost',
-                            f"{dlp.portfolio_cost_basis():,}",
-                            Styles.colorPalette[1]),
-            Styles.kpiboxes('Total Unr. Gains',
-                            f"{dlp.portfolio_unrealized_pnl():,}",
-                            Styles.colorPalette[2]),
-            Styles.kpiboxes('Total % Return',
-                            f"{dlp.portfolio_return_pct():.1%}",
-                            Styles.colorPalette[3]),
-        ]),
-        html.Hr(),
+        # --- Dynamic content filtered by account ---
+        html.Div(id="positions-content"),
 
-        # --- Interactive Holdings Table ---
-        html.H4("Holdings"),
-        html.Div([
-            _build_holdings_table(df),
-        ], className="card", style={**Styles.STYLE(100), "marginBottom": "20px"}),
-        html.Hr(),
-
-        # --- Charts row ---
-        html.Div([
-            dcc.Graph(
-                id='asset-type-pie',
-                figure={
-                    'data': [{
-                        'type': 'pie',
-                        'labels': dlp.allocation_by_asset_type()['asset_type'].tolist(),
-                        'values': dlp.allocation_by_asset_type()['weight'].tolist(),
-                        'textinfo': 'label+percent',
-                        'hoverinfo': 'label+value+percent',
-                        'hole': 0.35,
-                        'marker': {'colors': Styles.colorPalette},
-                    }],
-                    'layout': Styles.graph_layout(title='Asset Type Allocation')
-                }
-            )
-        ], className="card", style=Styles.STYLE(30)),
-        html.Div([''], style=Styles.FILLER()),
-        html.Div([
-            dcc.Graph(
-                id='geography-pie',
-                figure={
-                    'data': [{
-                        'type': 'pie',
-                        'labels': dlp.allocation_by_geography()['geography'].tolist(),
-                        'values': dlp.allocation_by_geography()['weight'].tolist(),
-                        'textinfo': 'label+percent',
-                        'hoverinfo': 'label+value+percent',
-                        'hole': 0.35,
-                        'marker': {'colors': Styles.colorPalette},
-                    }],
-                    'layout': Styles.graph_layout(title='Geography Allocation')
-                }
-            )
-        ], className="card", style=Styles.STYLE(30)),
-        html.Div([''], style=Styles.FILLER()),
-        html.Div([
-            dcc.Graph(
-                id='currency-pie',
-                figure={
-                    'data': [{
-                        'type': 'pie',
-                        'labels': dlp.allocation_by_currency()['currency'].tolist(),
-                        'values': dlp.allocation_by_currency()['weight'].tolist(),
-                        'textinfo': 'label+percent',
-                        'hoverinfo': 'label+value+percent',
-                        'hole': 0.35,
-                        'marker': {'colors': Styles.colorPalette},
-                    }],
-                    'layout': Styles.graph_layout(title='Currency Exposure')
-                }
-            )
-        ], className="card", style=Styles.STYLE(30)),
         html.Hr(),
 
         # --- Historical price chart ---
@@ -157,6 +97,108 @@ def layout():
 
 
 def register_callbacks(app):
+    @app.callback(
+        Output("positions-content", "children"),
+        [Input("account-filter", "value")]
+    )
+    def update_positions_view(account):
+        df = dlp.fetch_data()
+        if df.empty:
+            return html.P("No positions data available.")
+
+        # Filter by account if not "ALL"
+        if account and account != "ALL" and "account_id" in df.columns:
+            df = df[df["account_id"] == account]
+
+        total = df["total_value"].sum() if not df.empty else 0
+        cost = (df["quantity"] * df["unit_cost"]).sum() if not df.empty else 0
+        pnl = total - cost
+        ret_pct = pnl / cost if cost != 0 else 0
+
+        # Allocation breakdowns
+        at_alloc = df.groupby("asset_type")["total_value"].sum().reset_index()
+        at_alloc["weight"] = at_alloc["total_value"] / total if total > 0 else 0
+
+        geo_alloc = pd.DataFrame(columns=["geography", "weight"])
+        if "geography" in df.columns:
+            geo_alloc = df.groupby("geography")["total_value"].sum().reset_index()
+            geo_alloc["weight"] = geo_alloc["total_value"] / total if total > 0 else 0
+
+        ccy_alloc = pd.DataFrame(columns=["currency", "weight"])
+        if "currency" in df.columns:
+            ccy_alloc = df.groupby("currency")["total_value"].sum().reset_index()
+            ccy_alloc["weight"] = ccy_alloc["total_value"] / total if total > 0 else 0
+
+        return html.Div([
+            # KPI boxes
+            html.Div([
+                Styles.kpiboxes('Total Value', f"{int(total):,}", Styles.colorPalette[0]),
+                Styles.kpiboxes('Total Pur.-Cost', f"{int(cost):,}", Styles.colorPalette[1]),
+                Styles.kpiboxes('Total Unr. Gains', f"{int(pnl):,}", Styles.colorPalette[2]),
+                Styles.kpiboxes('Total % Return', f"{ret_pct:.1%}", Styles.colorPalette[3]),
+            ]),
+            html.Hr(),
+
+            # Holdings table
+            html.H4("Holdings"),
+            html.Div([
+                _build_holdings_table(df),
+            ], className="card", style={**Styles.STYLE(100), "marginBottom": "20px"}),
+            html.Hr(),
+
+            # Charts row
+            html.Div([
+                dcc.Graph(
+                    figure={
+                        'data': [{
+                            'type': 'pie',
+                            'labels': at_alloc['asset_type'].tolist(),
+                            'values': at_alloc['weight'].tolist(),
+                            'textinfo': 'label+percent',
+                            'hoverinfo': 'label+value+percent',
+                            'hole': 0.35,
+                            'marker': {'colors': Styles.colorPalette},
+                        }],
+                        'layout': Styles.graph_layout(title='Asset Type Allocation')
+                    }
+                )
+            ], className="card", style=Styles.STYLE(30)),
+            html.Div([''], style=Styles.FILLER()),
+            html.Div([
+                dcc.Graph(
+                    figure={
+                        'data': [{
+                            'type': 'pie',
+                            'labels': geo_alloc['geography'].tolist() if not geo_alloc.empty else [],
+                            'values': geo_alloc['weight'].tolist() if not geo_alloc.empty else [],
+                            'textinfo': 'label+percent',
+                            'hoverinfo': 'label+value+percent',
+                            'hole': 0.35,
+                            'marker': {'colors': Styles.colorPalette},
+                        }],
+                        'layout': Styles.graph_layout(title='Geography Allocation')
+                    }
+                )
+            ], className="card", style=Styles.STYLE(30)),
+            html.Div([''], style=Styles.FILLER()),
+            html.Div([
+                dcc.Graph(
+                    figure={
+                        'data': [{
+                            'type': 'pie',
+                            'labels': ccy_alloc['currency'].tolist() if not ccy_alloc.empty else [],
+                            'values': ccy_alloc['weight'].tolist() if not ccy_alloc.empty else [],
+                            'textinfo': 'label+percent',
+                            'hoverinfo': 'label+value+percent',
+                            'hole': 0.35,
+                            'marker': {'colors': Styles.colorPalette},
+                        }],
+                        'layout': Styles.graph_layout(title='Currency Exposure')
+                    }
+                )
+            ], className="card", style=Styles.STYLE(30)),
+        ])
+
     @app.callback(
         Output("upload-status", "children"),
         [Input("upload-positions", "contents")],

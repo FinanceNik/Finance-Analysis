@@ -1,4 +1,5 @@
 from dash import dcc, html, Input, Output
+import numpy as np
 import Styles
 import dataLoadPositions as dlp
 import user_settings
@@ -56,6 +57,38 @@ def layout():
         html.Div(id="scenario-kpis"),
         html.Hr(),
         html.Div(id="scenario-charts"),
+
+        # --- Withdrawal Strategy Simulator ---
+        html.Hr(),
+        html.H4("Withdrawal Strategy Simulator"),
+        html.Div([
+            html.Div([
+                html.Label("Retirement Portfolio"),
+                dcc.Input(id="withdraw-portfolio", type="number", value=1_000_000,
+                          style={"width": "100%", "padding": "6px"}),
+            ], style={"width": "22%", "display": "inline-block", "padding": "10px 20px"}),
+            html.Div([
+                html.Label("Annual Expenses"),
+                dcc.Input(id="withdraw-expenses", type="number", value=60_000,
+                          style={"width": "100%", "padding": "6px"}),
+            ], style={"width": "22%", "display": "inline-block", "padding": "10px 20px"}),
+            html.Div([
+                html.Label("Expected Return (%)"),
+                dcc.Slider(id="withdraw-return", min=2, max=12, step=0.5, value=6,
+                           marks={i: f"{i}%" for i in range(2, 13, 2)},
+                           tooltip={"placement": "bottom", "always_visible": True}),
+            ], style={"width": "22%", "display": "inline-block", "padding": "10px 20px"}),
+            html.Div([
+                html.Label("Strategy"),
+                dcc.Dropdown(id="withdraw-strategy",
+                             options=[
+                                 {"label": "Fixed 4% Rule", "value": "4pct"},
+                                 {"label": "Variable % (Guardrails)", "value": "variable"},
+                                 {"label": "Bucket Strategy", "value": "bucket"},
+                             ], value="4pct", clearable=False),
+            ], style={"width": "22%", "display": "inline-block", "padding": "10px 20px"}),
+        ]),
+        html.Div(id="withdraw-results"),
     ])
 
 
@@ -89,6 +122,66 @@ def _project_crash_scenario(start_value, annual_return, annual_contribution, yea
         else:
             current = current * (1 + annual_return / 100) + annual_contribution
         values.append(round(current))
+    return values
+
+
+def _simulate_4pct(portfolio, annual_expenses, return_rate, years):
+    """Fixed 4% Rule: withdraw 4% of initial portfolio (or annual_expenses),
+    adjust for 2% inflation each year, apply return to remaining balance."""
+    values = [portfolio]
+    p = portfolio
+    withdrawal = annual_expenses  # could also be 0.04 * portfolio
+    for yr in range(years):
+        withdrawal_this_year = withdrawal * (1.02 ** yr)
+        p = (p - withdrawal_this_year) * (1 + return_rate)
+        values.append(round(p))
+    return values
+
+
+def _simulate_variable(portfolio, return_rate, years):
+    """Variable % / Guardrails: base 4%, floor 3%, ceiling 5% of current value."""
+    values = [portfolio]
+    p = portfolio
+    for _ in range(years):
+        base_wd = 0.04 * p
+        floor_wd = 0.03 * p
+        ceil_wd = 0.05 * p
+        withdrawal = max(floor_wd, min(base_wd, ceil_wd))
+        p = (p - withdrawal) * (1 + return_rate)
+        values.append(round(p))
+    return values
+
+
+def _simulate_bucket(portfolio, annual_expenses, return_rate, years):
+    """Bucket strategy:
+    Bucket 1 – 2 years of expenses in cash (0% return)
+    Bucket 2 – 5 years of expenses in bonds (4% return)
+    Bucket 3 – remainder in equities (expected_return%)
+    Each year: withdraw from Bucket 1, refill from Bucket 2, refill Bucket 2 from Bucket 3.
+    """
+    b1 = min(annual_expenses * 2, portfolio)
+    b2 = min(annual_expenses * 5, portfolio - b1)
+    b3 = portfolio - b1 - b2
+    values = [portfolio]
+    for _ in range(years):
+        # Withdraw annual expenses from Bucket 1
+        withdrawal = min(annual_expenses, b1)
+        b1 -= withdrawal
+        # Refill Bucket 1 from Bucket 2
+        refill_b1 = min(annual_expenses - b1, b2)  # top up b1 to ~1yr expenses
+        b2 -= refill_b1
+        b1 += refill_b1
+        # Refill Bucket 2 from Bucket 3
+        target_b2 = annual_expenses * 5
+        refill_b2 = min(max(target_b2 - b2, 0), b3)
+        b3 -= refill_b2
+        b2 += refill_b2
+        # Apply returns
+        # Bucket 1: cash, 0% return
+        b2 = b2 * 1.04           # bonds 4%
+        b3 = b3 * (1 + return_rate)  # equities
+        total = b1 + b2 + b3
+        values.append(round(total))
     return values
 
 
@@ -284,3 +377,130 @@ def register_callbacks(app):
         ])
 
         return kpis, charts
+
+    # ── Withdrawal Strategy Simulator callback ──
+
+    @app.callback(
+        Output("withdraw-results", "children"),
+        [Input("withdraw-portfolio", "value"),
+         Input("withdraw-expenses", "value"),
+         Input("withdraw-return", "value"),
+         Input("withdraw-strategy", "value")]
+    )
+    def update_withdrawal(portfolio, expenses, expected_return, strategy):
+        portfolio = portfolio or 1_000_000
+        expenses = expenses or 60_000
+        expected_return = expected_return or 6
+        strategy = strategy or "4pct"
+
+        return_rate = expected_return / 100
+        years = 30
+
+        # ── Deterministic simulation for the selected strategy ──
+        values_4pct = _simulate_4pct(portfolio, expenses, return_rate, years)
+        values_variable = _simulate_variable(portfolio, return_rate, years)
+        values_bucket = _simulate_bucket(portfolio, expenses, return_rate, years)
+
+        strategy_map = {
+            "4pct": values_4pct,
+            "variable": values_variable,
+            "bucket": values_bucket,
+        }
+        selected_values = strategy_map[strategy]
+
+        # Years until depletion for selected strategy
+        depletion_year = "30+"
+        for yr, val in enumerate(selected_values):
+            if val <= 0:
+                depletion_year = str(yr)
+                break
+
+        final_portfolio = max(selected_values[-1], 0)
+
+        # Safe withdrawal rate: expenses / initial portfolio
+        safe_wr = (expenses / portfolio * 100) if portfolio > 0 else 0
+
+        # ── Monte Carlo survival probability (200 runs) ──
+        surviving = 0
+        for _ in range(200):
+            p = portfolio
+            alive = True
+            for yr in range(years):
+                actual_return = return_rate + np.random.normal(0, 0.15)
+                if strategy == "4pct":
+                    withdrawal = expenses * (1.02 ** yr)
+                elif strategy == "variable":
+                    base_wd = 0.04 * p
+                    floor_wd = 0.03 * p
+                    ceil_wd = 0.05 * p
+                    withdrawal = max(floor_wd, min(base_wd, ceil_wd))
+                else:  # bucket — simplified for MC
+                    withdrawal = expenses * (1.02 ** yr)
+                p = (p - withdrawal) * (1 + actual_return)
+                if p <= 0:
+                    alive = False
+                    break
+            if alive and p > 0:
+                surviving += 1
+        survival_pct = surviving / 200 * 100
+
+        # ── KPI row ──
+        kpis = html.Div([
+            Styles.kpiboxes("Years Until Depletion", depletion_year, Styles.colorPalette[0]),
+            Styles.kpiboxes("Survival Probability",
+                            f"{survival_pct:.0f}%",
+                            Styles.strongGreen if survival_pct >= 80 else Styles.strongRed),
+            Styles.kpiboxes("Final Portfolio Value",
+                            f"${final_portfolio:,.0f}",
+                            Styles.colorPalette[2]),
+            Styles.kpiboxes("Safe Withdrawal Rate",
+                            f"{safe_wr:.1f}%",
+                            Styles.purple_list[0]),
+        ])
+
+        # ── Overlay chart: all 3 strategies ──
+        year_labels = list(range(years + 1))
+        chart_colors = [Styles.colorPalette[0], Styles.purple_list[0], Styles.colorPalette[2]]
+
+        withdraw_chart = {
+            'data': [
+                {
+                    'x': year_labels,
+                    'y': [max(v, 0) for v in values_4pct],
+                    'type': 'scatter',
+                    'mode': 'lines',
+                    'name': 'Fixed 4% Rule',
+                    'line': {'color': chart_colors[0], 'width': 3},
+                },
+                {
+                    'x': year_labels,
+                    'y': [max(v, 0) for v in values_variable],
+                    'type': 'scatter',
+                    'mode': 'lines',
+                    'name': 'Variable % (Guardrails)',
+                    'line': {'color': chart_colors[1], 'width': 3, 'dash': 'dash'},
+                },
+                {
+                    'x': year_labels,
+                    'y': [max(v, 0) for v in values_bucket],
+                    'type': 'scatter',
+                    'mode': 'lines',
+                    'name': 'Bucket Strategy',
+                    'line': {'color': chart_colors[2], 'width': 3, 'dash': 'dot'},
+                },
+            ],
+            'layout': Styles.graph_layout(
+                title='Withdrawal Strategy Comparison — Portfolio Balance Over 30 Years',
+                xaxis={'title': 'Year'},
+                yaxis={'title': 'Portfolio Value ($)'},
+                legend={'orientation': 'h', 'y': -0.15},
+            ),
+        }
+
+        chart_div = html.Div([
+            html.Div([
+                dcc.Graph(id='withdraw-comparison-chart', figure=withdraw_chart)
+            ], className="card", style=Styles.STYLE(100)),
+        ])
+
+        return html.Div([kpis, html.Hr(), chart_div])

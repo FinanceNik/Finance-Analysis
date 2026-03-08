@@ -6,7 +6,7 @@ def monte_carlo_portfolio_simulation(runs, expected_return, volatility, time_hor
     df = dlp.fetch_data()
     initial_value = df['total_value'].sum()
 
-    np.random.seed(42)  # For reproducibility
+    # No fixed seed — each run produces varied results
 
     # Create empty array: rows = years + 1 (starting value), columns = runs
     portfolio_values = np.zeros((time_horizon + 1, runs))

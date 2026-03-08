@@ -49,6 +49,15 @@ def layout():
         html.Div([
             html.H5("Set Target Allocation"),
             html.Div(target_inputs),
+            html.Div([
+                html.Label("Alert Threshold"),
+                dcc.Input(
+                    id="rebal-alert-threshold",
+                    type="number", value=5, min=1, max=50,
+                    style={"width": "60px", "padding": "4px", "marginLeft": "8px"},
+                ),
+                html.Span("%", style={"marginLeft": "4px"}),
+            ], style={"display": "inline-block", "padding": "5px 15px"}),
         ], style={"marginBottom": "20px"}),
 
         html.Hr(),
@@ -61,9 +70,10 @@ def layout():
 def register_callbacks(app):
     @app.callback(
         Output("rebal-results", "children"),
-        [Input({"type": "rebal-target", "geo": ALL}, "value")]
+        [Input({"type": "rebal-target", "geo": ALL}, "value"),
+         Input("rebal-alert-threshold", "value")]
     )
-    def update_rebalancing(target_values):
+    def update_rebalancing(target_values, alert_threshold):
         df = dlp.fetch_data()
         if df.empty or "geography" not in df.columns:
             return html.P("No data available.")
@@ -161,10 +171,36 @@ def register_callbacks(app):
             Styles.colorPalette[3] if total_drift < 10 else Styles.strongRed
         )
 
+        # Alert badges
+        threshold = alert_threshold or 5
+        alerts = []
+        for r in rows:
+            if abs(r["diff_pct"]) > threshold:
+                direction = "Over" if r["diff_pct"] < 0 else "Under"
+                color = Styles.strongRed if r["diff_pct"] < 0 else Styles.colorPalette[3]
+                alerts.append(html.Span(
+                    f" {r['geo']}: {direction}weight by {abs(r['diff_pct']):.1f}% ",
+                    className="alert-badge",
+                    style={"backgroundColor": color},
+                ))
+
+        alert_box = html.Div()
+        if alerts:
+            alert_box = html.Div([
+                html.H5("Rebalancing Alerts", style={"color": Styles.strongRed, "margin": "0 0 8px 0"}),
+                html.Div(alerts),
+            ], className="card", style={
+                **Styles.STYLE(100),
+                "border": f"2px solid {Styles.strongRed}",
+                "marginBottom": "15px",
+            })
+
         return html.Div([
+            alert_box,
             html.Div([
                 Styles.kpiboxes("Portfolio Value", f"{total:,}", Styles.colorPalette[0]),
                 Styles.kpiboxes("Total Drift", f"{total_drift:.1f}%", drift_color),
+                Styles.kpiboxes("Alert Threshold", f"{threshold}%", Styles.colorPalette[2]),
             ]),
             html.Hr(),
             html.Div([

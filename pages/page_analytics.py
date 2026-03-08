@@ -319,6 +319,113 @@ def _build_drawdown_chart(drawdown_series):
     ], className="card", style=Styles.STYLE(100))
 
 
+def _build_correlation_heatmap():
+    """Build a correlation matrix heatmap from historical returns."""
+    try:
+        hist = pd.read_csv("data/historical_data.csv")
+        if "date" in hist.columns:
+            hist = hist.set_index("date")
+        hist = 10 ** hist
+        daily_returns = hist.pct_change().dropna()
+        corr = daily_returns.corr()
+    except Exception:
+        return html.Div()
+
+    if corr.empty:
+        return html.Div()
+
+    chart = {
+        'data': [{
+            'type': 'heatmap',
+            'z': corr.values.round(2).tolist(),
+            'x': corr.columns.tolist(),
+            'y': corr.index.tolist(),
+            'colorscale': 'RdBu_r',
+            'zmin': -1, 'zmax': 1,
+            'text': [[f"{v:.2f}" for v in row] for row in corr.values],
+            'texttemplate': '%{text}',
+            'hovertemplate': '%{x} vs %{y}: %{z:.2f}<extra></extra>',
+            'colorbar': {'title': 'Corr'},
+        }],
+        'layout': Styles.graph_layout(
+            title='Return Correlation Matrix',
+            height=max(400, len(corr) * 45),
+            margin={'l': 100, 'b': 100, 't': 40, 'r': 20},
+        ),
+    }
+
+    return html.Div([
+        dcc.Graph(id='correlation-heatmap', figure=chart)
+    ], className="card", style=Styles.STYLE(100))
+
+
+def _build_sector_treemap(df):
+    """Build a treemap showing portfolio allocation by sector."""
+    if df.empty or 'market_value' not in df.columns:
+        return html.Div()
+
+    df = df.copy()
+    df["sector"] = df["symbol"].map(config.SECTOR_MAP).fillna("Other")
+
+    labels = ["Portfolio"] + df["sector"].unique().tolist() + df["symbol"].tolist()
+    parents = [""] + ["Portfolio"] * df["sector"].nunique() + df["sector"].tolist()
+    values = [0] + [0] * df["sector"].nunique() + df["market_value"].round(0).tolist()
+
+    chart = {
+        'data': [{
+            'type': 'treemap',
+            'labels': labels,
+            'parents': parents,
+            'values': values,
+            'textinfo': 'label+percent parent',
+            'branchvalues': 'total',
+            'marker': {'colorscale': 'Blues'},
+        }],
+        'layout': Styles.graph_layout(
+            title='Sector Allocation (Treemap)',
+            margin={'t': 40, 'b': 10, 'l': 10, 'r': 10},
+            height=450,
+        ),
+    }
+
+    return html.Div([
+        dcc.Graph(id='sector-treemap', figure=chart)
+    ], className="card", style=Styles.STYLE(48))
+
+
+def _build_geography_treemap(df):
+    """Build a treemap showing portfolio allocation by geography."""
+    if df.empty or 'geography' not in df.columns or 'market_value' not in df.columns:
+        return html.Div()
+
+    df = df.copy()
+
+    labels = ["Portfolio"] + df["geography"].unique().tolist() + df["symbol"].tolist()
+    parents = [""] + ["Portfolio"] * df["geography"].nunique() + df["geography"].tolist()
+    values = [0] + [0] * df["geography"].nunique() + df["market_value"].round(0).tolist()
+
+    chart = {
+        'data': [{
+            'type': 'treemap',
+            'labels': labels,
+            'parents': parents,
+            'values': values,
+            'textinfo': 'label+percent parent',
+            'branchvalues': 'total',
+            'marker': {'colorscale': 'Greens'},
+        }],
+        'layout': Styles.graph_layout(
+            title='Geography Allocation (Treemap)',
+            margin={'t': 40, 'b': 10, 'l': 10, 'r': 10},
+            height=450,
+        ),
+    }
+
+    return html.Div([
+        dcc.Graph(id='geo-treemap', figure=chart)
+    ], className="card", style=Styles.STYLE(48))
+
+
 def layout():
     df, metrics, drawdown_series = _compute_analytics()
 
@@ -448,4 +555,14 @@ def layout():
 
         # Expense ratio tracking
         _build_expense_ratio_section(df),
+        html.Hr(),
+
+        # Correlation heatmap
+        _build_correlation_heatmap(),
+        html.Hr(),
+
+        # Sector & Geography treemaps
+        _build_sector_treemap(df),
+        html.Div([''], style=Styles.FILLER()),
+        _build_geography_treemap(df),
     ])

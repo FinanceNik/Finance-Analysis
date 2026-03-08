@@ -40,3 +40,27 @@ DEFAULT_TARGET_ALLOCATION = {
     "EM":     10,
     "Crypto":  5,
 }
+
+# Sector mapping for positions (manually maintained)
+SECTOR_MAP = {
+    "APC":    "Technology",
+    "ABEC":   "Technology",
+    "307":    "Technology",
+    "GOOG":   "Technology",
+    "AMZN":   "Technology",
+    "QQQM":   "Technology",
+    "FTK":    "Financials",
+    "AHYQ":   "Diversified",
+    "CBMEM":  "Diversified",
+    "SPICHA": "Diversified",
+    "VGEU":   "Diversified",
+    "VFEM":   "Diversified",
+    "EIMI":   "Diversified",
+    "WOSC":   "Diversified",
+    "XDEM":   "Diversified",
+    "ETH":    "Crypto",
+    "BTC":    "Crypto",
+    "BNT":    "Crypto",
+    "POL":    "Crypto",
+    "LINK":   "Crypto",
+}
