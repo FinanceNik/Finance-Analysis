@@ -1,5 +1,6 @@
 import os
 import logging
+import glob
 import pandas as pd
 from datetime import datetime
 from functools import lru_cache
@@ -9,9 +10,22 @@ logger = logging.getLogger(__name__)
 currentYear = int(datetime.today().strftime('%Y'))
 months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
-# Default filepath — can be overridden via upload
-_positions_filepath = "data/Positions_1640083_09012026_10_54.csv"
 _transactions_filepath = "data/transactions-from-01012023-to-22112025.csv"
+
+
+def _find_latest_positions_file() -> str:
+    """Find the most recent positions file (CSV or XLS) in the data directory."""
+    patterns = ["data/Positions_*.csv", "data/Positions_*.xls", "data/Positions_*.xlsx"]
+    all_files = []
+    for pattern in patterns:
+        all_files.extend(glob.glob(pattern))
+    if not all_files:
+        return ""
+    # Return the most recently modified file
+    return max(all_files, key=os.path.getmtime)
+
+
+_positions_filepath = _find_latest_positions_file()
 
 
 def set_positions_filepath(path: str):
@@ -33,20 +47,103 @@ def _standardize_columns(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def _parse_xls_positions(filepath: str) -> pd.DataFrame:
+    """Parse the broker XLS export which has category header rows and subtotal rows."""
+    df = pd.read_excel(filepath)
+    df = _standardize_columns(df)
+
+    # The first unnamed column contains category headers like "Shares", "ETFs", "Cryptocurrencies"
+    # and subtotal/total rows. We need to extract the category and filter to actual position rows.
+    first_col = df.columns[0]  # usually ' ' or unnamed
+
+    # Identify category rows — they have text in the first column and NaN in numeric columns
+    current_category = "Unknown"
+    categories = []
+    keep_rows = []
+
+    for idx, row in df.iterrows():
+        first_val = str(row[first_col]).strip() if pd.notna(row[first_col]) else ""
+        symbol = str(row.get("symbol", "")).strip() if pd.notna(row.get("symbol")) else ""
+
+        # Category header rows: first column has text, symbol is empty
+        if first_val and not symbol:
+            # Skip subtotal and total rows
+            if "subtotal" in first_val.lower() or first_val.lower() == "total":
+                continue
+            current_category = first_val
+            continue
+
+        # Subtotal/total rows in first column
+        if "subtotal" in first_val.lower() or first_val.lower() == "total":
+            continue
+
+        # Actual position rows: have a symbol that isn't a subtotal/total
+        if symbol and "subtotal" not in symbol.lower() and symbol.lower() != "total":
+            categories.append(current_category)
+            keep_rows.append(idx)
+
+    if not keep_rows:
+        return pd.DataFrame()
+
+    df_positions = df.loc[keep_rows].copy()
+    df_positions["asset_type"] = categories
+
+    # Drop the first unnamed column and any fully empty columns
+    if first_col in df_positions.columns:
+        df_positions = df_positions.drop(columns=[first_col])
+    unnamed_cols = [c for c in df_positions.columns if "unnamed" in str(c).lower()]
+    df_positions = df_positions.drop(columns=unnamed_cols, errors="ignore")
+
+    # Map category names to geography based on known ticker patterns
+    # The CSV had geography info; for XLS we derive from the old CSV mapping
+    geography_map = _load_geography_map()
+    df_positions["geography"] = df_positions["symbol"].map(geography_map).fillna("Other")
+
+    # Ensure numeric columns are numeric
+    for col in ["quantity", "unit_cost", "total_value", "price"]:
+        if col in df_positions.columns:
+            df_positions[col] = pd.to_numeric(df_positions[col], errors="coerce")
+
+    # Rename ccy to currency for consistency
+    if "ccy" in df_positions.columns and "currency" not in df_positions.columns:
+        df_positions = df_positions.rename(columns={"ccy": "currency"})
+
+    df_positions = df_positions.reset_index(drop=True)
+    return df_positions
+
+
+def _load_geography_map() -> dict:
+    """Load geography mapping from the CSV positions file if it exists."""
+    csv_files = glob.glob("data/Positions_*.csv")
+    for f in csv_files:
+        try:
+            df = pd.read_csv(f, sep=",")
+            df = _standardize_columns(df)
+            if "symbol" in df.columns and "geography" in df.columns:
+                return dict(zip(df["symbol"].str.strip(), df["geography"].str.strip()))
+        except Exception:
+            continue
+    return {}
+
+
 @lru_cache(maxsize=1)
 def fetch_data() -> pd.DataFrame:
-    if not os.path.exists(_positions_filepath):
+    if not _positions_filepath or not os.path.exists(_positions_filepath):
         logger.warning("Positions file not found: %s", _positions_filepath)
         return pd.DataFrame()
 
-    df = pd.read_csv(_positions_filepath, sep=",")
-    df = _standardize_columns(df)
+    ext = os.path.splitext(_positions_filepath)[1].lower()
 
-    for col in df.columns:
-        if "date" in col:
-            df[col] = pd.to_datetime(df[col], errors="coerce")
+    if ext in (".xls", ".xlsx"):
+        df = _parse_xls_positions(_positions_filepath)
+    else:
+        df = pd.read_csv(_positions_filepath, sep=",")
+        df = _standardize_columns(df)
+        for col in df.columns:
+            if "date" in col:
+                df[col] = pd.to_datetime(df[col], errors="coerce")
+        df = df.apply(lambda s: s.str.strip() if s.dtype == "object" else s)
 
-    df = df.apply(lambda s: s.str.strip() if s.dtype == "object" else s)
     return df
 
 
@@ -114,6 +211,8 @@ def allocation_by_asset_type() -> pd.DataFrame:
 def allocation_by_geography() -> pd.DataFrame:
     df = fetch_data()
     if df.empty:
+        return pd.DataFrame(columns=["geography", "weight"])
+    if "geography" not in df.columns:
         return pd.DataFrame(columns=["geography", "weight"])
     total = portfolio_total_value()
     alloc = df.groupby("geography")["total_value"].sum().reset_index()
