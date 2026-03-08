@@ -28,18 +28,18 @@ def _build_dividend_analysis():
                 'text': [f"{v:,.0f}" for v in by_symbol.values],
                 'textposition': 'outside',
             }],
-            'layout': {
-                'title': 'Total Dividends Received by Holding',
-                'xaxis': {'title': 'Total Dividends'},
-                'margin': {'t': 40, 'b': 40, 'l': 120, 'r': 60},
-                'height': max(250, len(by_symbol) * 28),
-            }
+            'layout': Styles.graph_layout(
+                title='Total Dividends Received by Holding',
+                xaxis={'title': 'Total Dividends'},
+                margin={'l': 120, 'r': 60},
+                height=max(250, len(by_symbol) * 28),
+            )
         }
     else:
-        div_by_symbol_chart = {'data': [], 'layout': {'title': 'No symbol data'}}
+        div_by_symbol_chart = {'data': [], 'layout': Styles.graph_layout(title='No symbol data')}
 
     # Monthly dividend trend (all years)
-    div_trend_chart = {'data': [], 'layout': {'title': 'No date data'}}
+    div_trend_chart = {'data': [], 'layout': Styles.graph_layout(title='No date data')}
     if "date" in dividends.columns:
         dividends["year_month"] = dividends["date"].dt.to_period("M").astype(str)
         monthly = dividends.groupby("year_month")["net_amount"].sum().reset_index()
@@ -52,12 +52,12 @@ def _build_dividend_analysis():
                 'marker': {'color': Styles.strongGreen},
                 'name': 'Monthly Dividends',
             }],
-            'layout': {
-                'title': 'Monthly Dividend Income Over Time',
-                'xaxis': {'title': 'Month'},
-                'yaxis': {'title': 'Dividend Income'},
-                'margin': {'t': 40, 'b': 60, 'l': 60, 'r': 40},
-            }
+            'layout': Styles.graph_layout(
+                title='Monthly Dividend Income Over Time',
+                xaxis={'title': 'Month'},
+                yaxis={'title': 'Dividend Income'},
+                margin={'b': 60, 'l': 60},
+            )
         }
 
     # Dividend yield estimate
@@ -83,16 +83,16 @@ def _build_dividend_analysis():
                     'text': [f"{v:.2f}%" for v in (yields * 100)],
                     'textposition': 'outside',
                 }],
-                'layout': {
-                    'title': 'Estimated Dividend Yield by Holding',
-                    'xaxis': {'title': 'Yield (%)'},
-                    'margin': {'t': 40, 'b': 40, 'l': 120, 'r': 60},
-                    'height': max(250, len(yields) * 28),
-                }
+                'layout': Styles.graph_layout(
+                    title='Estimated Dividend Yield by Holding',
+                    xaxis={'title': 'Yield (%)'},
+                    margin={'l': 120, 'r': 60},
+                    height=max(250, len(yields) * 28),
+                )
             }
             yield_section = html.Div([
                 dcc.Graph(id='dividend-yield-chart', figure=yield_chart)
-            ], style=Styles.STYLE(48))
+            ], className="card", style=Styles.STYLE(48))
 
     return html.Div([
         html.Hr(),
@@ -100,13 +100,13 @@ def _build_dividend_analysis():
         html.Div([
             html.Div([
                 dcc.Graph(id='div-trend-chart', figure=div_trend_chart)
-            ], style=Styles.STYLE(100)),
+            ], className="card", style=Styles.STYLE(100)),
         ]),
         html.Hr(),
         html.Div([
             html.Div([
                 dcc.Graph(id='div-by-symbol-chart', figure=div_by_symbol_chart)
-            ], style=Styles.STYLE(48)),
+            ], className="card", style=Styles.STYLE(48)),
             html.Div([''], style=Styles.FILLER()),
             yield_section,
         ]),
@@ -121,16 +121,16 @@ def render_page_content():
     return html.Div([
         html.Hr(),
         html.Div([
-            Styles.kpiboxes(f'Total Dividends:',
+            Styles.kpiboxes('Total Dividends',
                             dlt.total_transaction_amount(y0, "Dividend"),
                             Styles.colorPalette[0]),
-            Styles.kpiboxes(f'Total New Investments:',
+            Styles.kpiboxes('Total New Investments',
                             dlt.total_transaction_amount(y0, "Payment"),
                             Styles.colorPalette[1]),
-            Styles.kpiboxes(f'Total Sec. Lending:',
+            Styles.kpiboxes('Total Sec. Lending',
                             dlt.total_transaction_amount(y0, "Securities Lending"),
                             Styles.colorPalette[2]),
-            Styles.kpiboxes(f'Total Fees:',
+            Styles.kpiboxes('Total Fees',
                             dlt.total_transaction_amount(y0, "Custody Fees"),
                             Styles.colorPalette[3]),
         ]),
@@ -149,16 +149,15 @@ def render_page_content():
                             'marker': {'color': Styles.colorPalette[1]}
                         },
                     ],
-                    'layout': {
-                        'barmode': 'group',
-                        'title': 'Yearly Dividend Summary',
-                        'xaxis': {'title': 'Year'},
-                        'yaxis': {'title': 'Total'},
-                        'margin': {'t': 40, 'b': 40, 'l': 40, 'r': 40},
-                    }
+                    'layout': Styles.graph_layout(
+                        barmode='group',
+                        title='Yearly Dividend Summary',
+                        xaxis={'title': 'Year'},
+                        yaxis={'title': 'Total'},
+                    )
                 }
             )
-        ], style=Styles.STYLE(100)),
+        ], className="card", style=Styles.STYLE(100)),
         html.Hr(),
         # --- Monthly Dividends: 3-year comparison ---
         html.Div([
@@ -189,16 +188,15 @@ def render_page_content():
                             'marker': {'color': Styles.colorPalette[0]}
                         },
                     ],
-                    'layout': {
-                        'barmode': 'group',
-                        'title': 'Monthly Dividends Comparison',
-                        'xaxis': {'title': 'Month'},
-                        'yaxis': {'title': 'Dividends Paid'},
-                        'margin': {'t': 40, 'b': 40, 'l': 40, 'r': 40},
-                    }
+                    'layout': Styles.graph_layout(
+                        barmode='group',
+                        title='Monthly Dividends Comparison',
+                        xaxis={'title': 'Month'},
+                        yaxis={'title': 'Dividends Paid'},
+                    )
                 }
             )
-        ], style=Styles.STYLE(80)),
+        ], className="card", style=Styles.STYLE(80)),
         html.Div([''], style=Styles.FILLER()),
         html.Div([
             html.H4(f"Annual"),
@@ -216,14 +214,13 @@ def render_page_content():
                             'name': 'Yearly Dividend'
                         }
                     ],
-                    'layout': {
-                        'xaxis': {'title': 'Year'},
-                        'yaxis': {'title': 'Dividend Total'},
-                        'margin': {'t': 40, 'b': 40, 'l': 40, 'r': 40},
-                    }
+                    'layout': Styles.graph_layout(
+                        xaxis={'title': 'Year'},
+                        yaxis={'title': 'Dividend Total'},
+                    )
                 }
             )
-        ], style=Styles.STYLE(18)),
+        ], className="card", style=Styles.STYLE(18)),
         # --------------------------------------------------------------------------------------------------------------
         html.Hr(),
         # --- Monthly Investments: 3-year comparison ---
@@ -255,16 +252,15 @@ def render_page_content():
                             'marker': {'color': Styles.colorPalette[0]}
                         },
                     ],
-                    'layout': {
-                        'barmode': 'group',
-                        'title': 'Monthly Investment Comparison',
-                        'xaxis': {'title': 'Month'},
-                        'yaxis': {'title': 'Investments'},
-                        'margin': {'t': 40, 'b': 40, 'l': 40, 'r': 40},
-                    }
+                    'layout': Styles.graph_layout(
+                        barmode='group',
+                        title='Monthly Investment Comparison',
+                        xaxis={'title': 'Month'},
+                        yaxis={'title': 'Investments'},
+                    )
                 }
             )
-        ], style=Styles.STYLE(80)),
+        ], className="card", style=Styles.STYLE(80)),
         html.Div([''], style=Styles.FILLER()),
         html.Div([
             html.H4(f"Annual"),
@@ -282,14 +278,13 @@ def render_page_content():
                             'name': 'Yearly Investments'
                         }
                     ],
-                    'layout': {
-                        'xaxis': {'title': 'Year'},
-                        'yaxis': {'title': 'Investment Total'},
-                        'margin': {'t': 40, 'b': 40, 'l': 40, 'r': 40},
-                    }
+                    'layout': Styles.graph_layout(
+                        xaxis={'title': 'Year'},
+                        yaxis={'title': 'Investment Total'},
+                    )
                 }
             )
-        ], style=Styles.STYLE(18)),
+        ], className="card", style=Styles.STYLE(18)),
 
         # Dividend analysis section
         _build_dividend_analysis(),

@@ -87,10 +87,10 @@ def register_callbacks(app):
 
         # KPI boxes
         kpis = html.Div([
-            Styles.kpiboxes("Portfolio:", f"{portfolio_value:,}", Styles.colorPalette[0]),
-            Styles.kpiboxes("Total Assets:", f"{total_assets:,}", Styles.colorPalette[1]),
-            Styles.kpiboxes("Liabilities:", f"{liabilities:,}", Styles.strongRed),
-            Styles.kpiboxes("Net Worth:", f"{net_worth:,}", Styles.strongGreen),
+            Styles.kpiboxes("Portfolio", f"{portfolio_value:,}", Styles.colorPalette[0]),
+            Styles.kpiboxes("Total Assets", f"{total_assets:,}", Styles.colorPalette[1]),
+            Styles.kpiboxes("Liabilities", f"{liabilities:,}", Styles.strongRed),
+            Styles.kpiboxes("Net Worth", f"{net_worth:,}", Styles.strongGreen),
         ])
 
         # Build asset breakdown for pie chart
@@ -129,10 +129,7 @@ def register_callbacks(app):
                 'marker': {'colors': Styles.purple_list + [Styles.strongGreen, Styles.strongRed]},
                 'hole': 0.35,
             }],
-            'layout': {
-                'title': 'Net Worth Composition',
-                'margin': {'t': 40, 'b': 40, 'l': 40, 'r': 40},
-            }
+            'layout': Styles.graph_layout(title='Net Worth Composition')
         }
 
         # Assets vs Liabilities bar
@@ -151,11 +148,10 @@ def register_callbacks(app):
                 'text': [f"{v:,.0f}" for v in bar_values],
                 'textposition': 'outside',
             }],
-            'layout': {
-                'title': 'Assets vs Liabilities',
-                'yaxis': {'title': 'Value'},
-                'margin': {'t': 40, 'b': 60, 'l': 60, 'r': 40},
-            }
+            'layout': Styles.graph_layout(
+                title='Assets vs Liabilities',
+                yaxis={'title': 'Value'},
+            )
         }
 
         # Cumulative investment from Buy transactions (actual securities purchased)
@@ -178,25 +174,24 @@ def register_callbacks(app):
                         'name': 'Cumulative Invested',
                         'line': {'color': Styles.colorPalette[0]},
                     }],
-                    'layout': {
-                        'title': 'Cumulative Capital Invested Over Time',
-                        'xaxis': {'title': 'Date', 'type': 'date'},
-                        'yaxis': {'title': 'Cumulative Amount'},
-                        'margin': {'t': 40, 'b': 40, 'l': 60, 'r': 40},
-                    }
+                    'layout': Styles.graph_layout(
+                        title='Cumulative Capital Invested Over Time',
+                        xaxis={'title': 'Date', 'type': 'date'},
+                        yaxis={'title': 'Cumulative Amount'},
+                    )
                 }
                 inv_chart_div = html.Div([
                     dcc.Graph(id='nw-cumulative-investment', figure=inv_chart)
-                ], style=Styles.STYLE(100))
+                ], className="card", style=Styles.STYLE(100))
 
         charts = html.Div([
             html.Div([
                 dcc.Graph(id='nw-composition-pie', figure=nw_pie)
-            ], style=Styles.STYLE(48)),
+            ], className="card", style=Styles.STYLE(48)),
             html.Div([''], style=Styles.FILLER()),
             html.Div([
                 dcc.Graph(id='nw-bar-chart', figure=bar_chart)
-            ], style=Styles.STYLE(48)),
+            ], className="card", style=Styles.STYLE(48)),
             html.Hr(),
             inv_chart_div,
         ])

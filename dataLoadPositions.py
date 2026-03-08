@@ -144,6 +144,10 @@ def fetch_data() -> pd.DataFrame:
                 df[col] = pd.to_datetime(df[col], errors="coerce")
         df = df.apply(lambda s: s.str.strip() if s.dtype == "object" else s)
 
+    # Normalize ccy → currency for consistency
+    if "ccy" in df.columns and "currency" not in df.columns:
+        df = df.rename(columns={"ccy": "currency"})
+
     return df
 
 

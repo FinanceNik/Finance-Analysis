@@ -77,9 +77,11 @@ def _build_expense_ratio_section(df):
             'textposition': 'outside',
         }],
         'layout': {
-            'title': f'ETF Annual Costs (Weighted TER: {weighted_ter:.2%}, Total: {total_annual_cost:,.0f}/yr)',
-            'xaxis': {'title': 'Annual Cost'},
-            'margin': {'t': 40, 'b': 40, 'l': 120, 'r': 80},
+            **Styles.graph_layout(
+                title=f'ETF Annual Costs (Weighted TER: {weighted_ter:.2%}, Total: {total_annual_cost:,.0f}/yr)',
+                xaxis={'title': 'Annual Cost'},
+                margin={'t': 40, 'b': 40, 'l': 120, 'r': 80},
+            ),
             'height': max(250, len(etfs_with_ter) * 35),
         }
     }
@@ -88,7 +90,7 @@ def _build_expense_ratio_section(df):
         html.Hr(),
         html.Div([
             dcc.Graph(id='expense-ratio-chart', figure=chart)
-        ], style=Styles.STYLE(100)),
+        ], className="card", style=Styles.STYLE(100)),
     ])
 
 
@@ -125,18 +127,17 @@ def _build_currency_impact(df):
                 'marker': {'color': colors},
             },
         ],
-        'layout': {
-            'title': 'Performance by Currency',
-            'barmode': 'group',
-            'xaxis': {'title': 'Currency'},
-            'yaxis': {'title': 'Value'},
-            'margin': {'t': 40, 'b': 40, 'l': 60, 'r': 40},
-        }
+        'layout': Styles.graph_layout(
+            title='Performance by Currency',
+            barmode='group',
+            xaxis={'title': 'Currency'},
+            yaxis={'title': 'Value'},
+        ),
     }
 
     return html.Div([
         dcc.Graph(id='currency-impact-chart', figure=chart)
-    ], style=Styles.STYLE(48))
+    ], className="card", style=Styles.STYLE(48))
 
 
 def _build_benchmark_section():
@@ -184,18 +185,17 @@ def _build_benchmark_section():
 
     chart = {
         'data': traces,
-        'layout': {
-            'title': 'Normalized Performance (Base = 100)',
-            'xaxis': {'title': 'Date', 'type': 'date'},
-            'yaxis': {'title': 'Indexed Value'},
-            'margin': {'t': 40, 'b': 40, 'l': 60, 'r': 40},
-            'hovermode': 'x unified',
-        }
+        'layout': Styles.graph_layout(
+            title='Normalized Performance (Base = 100)',
+            xaxis={'title': 'Date', 'type': 'date'},
+            yaxis={'title': 'Indexed Value'},
+            hovermode='x unified',
+        ),
     }
 
     return html.Div([
         dcc.Graph(id='benchmark-chart', figure=chart)
-    ], style=Styles.STYLE(100))
+    ], className="card", style=Styles.STYLE(100))
 
 
 def layout():
@@ -209,10 +209,10 @@ def layout():
 
     # --- KPI row ---
     kpi_row = html.Div([
-        Styles.kpiboxes('Portfolio Sharpe:', metrics.get("sharpe", "N/A"), Styles.colorPalette[0]),
-        Styles.kpiboxes('Est. Annual Return:', metrics.get("annual_return", "N/A"), Styles.colorPalette[1]),
-        Styles.kpiboxes('Est. Annual Vol:', metrics.get("annual_vol", "N/A"), Styles.colorPalette[2]),
-        Styles.kpiboxes('Total Market Value:', f"{metrics.get('total_mv', 0):,}", Styles.colorPalette[3]),
+        Styles.kpiboxes('Portfolio Sharpe', metrics.get("sharpe", "N/A"), Styles.colorPalette[0]),
+        Styles.kpiboxes('Est. Annual Return', metrics.get("annual_return", "N/A"), Styles.colorPalette[1]),
+        Styles.kpiboxes('Est. Annual Vol', metrics.get("annual_vol", "N/A"), Styles.colorPalette[2]),
+        Styles.kpiboxes('Total Market Value', f"{metrics.get('total_mv', 0):,}", Styles.colorPalette[3]),
     ])
 
     # --- Per-holding P&L chart ---
@@ -228,9 +228,11 @@ def layout():
             'marker': {'color': colors},
         }],
         'layout': {
-            'title': 'Unrealized P&L by Holding',
-            'xaxis': {'title': 'Unrealized P&L'},
-            'margin': {'t': 40, 'b': 40, 'l': 120, 'r': 40},
+            **Styles.graph_layout(
+                title='Unrealized P&L by Holding',
+                xaxis={'title': 'Unrealized P&L'},
+                margin={'t': 40, 'b': 40, 'l': 120, 'r': 40},
+            ),
             'height': max(300, len(df_sorted) * 28),
         }
     }
@@ -250,9 +252,11 @@ def layout():
             'textposition': 'outside',
         }],
         'layout': {
-            'title': 'Return % by Holding',
-            'xaxis': {'title': 'Return (%)'},
-            'margin': {'t': 40, 'b': 40, 'l': 120, 'r': 60},
+            **Styles.graph_layout(
+                title='Return % by Holding',
+                xaxis={'title': 'Return (%)'},
+                margin={'t': 40, 'b': 40, 'l': 120, 'r': 60},
+            ),
             'height': max(300, len(df_pct) * 28),
         }
     }
@@ -268,11 +272,11 @@ def layout():
             'text': [f"{v:.1f}%" for v in (df_top['weight'] * 100)],
             'textposition': 'outside',
         }],
-        'layout': {
-            'title': 'Top 10 Holdings by Portfolio Weight',
-            'yaxis': {'title': 'Weight (%)'},
-            'margin': {'t': 40, 'b': 80, 'l': 40, 'r': 40},
-        }
+        'layout': Styles.graph_layout(
+            title='Top 10 Holdings by Portfolio Weight',
+            yaxis={'title': 'Weight (%)'},
+            margin={'t': 40, 'b': 80, 'l': 40, 'r': 40},
+        ),
     }
 
     return html.Div([
@@ -288,17 +292,17 @@ def layout():
         # Top holdings
         html.Div([
             dcc.Graph(id='top-holdings-chart', figure=weight_chart)
-        ], style=Styles.STYLE(100)),
+        ], className="card", style=Styles.STYLE(100)),
         html.Hr(),
 
         # P&L charts
         html.Div([
             dcc.Graph(id='pnl-by-holding-chart', figure=pnl_chart)
-        ], style=Styles.STYLE(48)),
+        ], className="card", style=Styles.STYLE(48)),
         html.Div([''], style=Styles.FILLER()),
         html.Div([
             dcc.Graph(id='return-by-holding-chart', figure=return_chart)
-        ], style=Styles.STYLE(48)),
+        ], className="card", style=Styles.STYLE(48)),
         html.Hr(),
 
         # Currency impact

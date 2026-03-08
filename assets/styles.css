@@ -1,18 +1,311 @@
+/* ===== CSS Variables — Light Mode (default) ===== */
 :root {
---bs-body-font-size: 1rem;
+    --bg-primary: #f5f5f7;
+    --bg-card: #ffffff;
+    --bg-sidebar: #fbfbfd;
+    --bg-input: #ffffff;
+    --text-primary: #1d1d1f;
+    --text-secondary: #6e6e73;
+    --text-muted: #86868b;
+    --accent: #0071e3;
+    --accent-hover: #0077ed;
+    --border-color: rgba(0, 0, 0, 0.06);
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04);
+    --shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+    --shadow-lg: 0 4px 24px rgba(0, 0, 0, 0.08);
+    --radius: 12px;
+    --radius-sm: 8px;
+    --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", system-ui, "Segoe UI", Roboto, sans-serif;
+    --transition: 0.25s ease;
+    --hr-color: rgba(0, 0, 0, 0.08);
+    --table-stripe: #fafafa;
+    --table-header-bg: #1d1d1f;
+    --table-header-fg: #ffffff;
+    --kpi-text: #ffffff;
+    --nav-active-bg: rgba(0, 113, 227, 0.1);
+    --nav-active-color: #0071e3;
+    --nav-hover-bg: rgba(0, 0, 0, 0.04);
+    --progress-bg: #e8e8ed;
+    --green: #34c759;
+    --red: #ff3b30;
 }
+
+/* ===== Dark Mode ===== */
+.dark-mode {
+    --bg-primary: #000000;
+    --bg-card: #1c1c1e;
+    --bg-sidebar: #1c1c1e;
+    --bg-input: #2c2c2e;
+    --text-primary: #f5f5f7;
+    --text-secondary: #a1a1a6;
+    --text-muted: #6e6e73;
+    --accent: #0a84ff;
+    --accent-hover: #409cff;
+    --border-color: rgba(255, 255, 255, 0.08);
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.2);
+    --shadow: 0 2px 12px rgba(0, 0, 0, 0.3);
+    --shadow-lg: 0 4px 24px rgba(0, 0, 0, 0.4);
+    --hr-color: rgba(255, 255, 255, 0.1);
+    --table-stripe: #2c2c2e;
+    --table-header-bg: #2c2c2e;
+    --table-header-fg: #f5f5f7;
+    --nav-active-bg: rgba(10, 132, 255, 0.15);
+    --nav-active-color: #0a84ff;
+    --nav-hover-bg: rgba(255, 255, 255, 0.06);
+    --progress-bg: #38383a;
+    --green: #30d158;
+    --red: #ff453a;
+}
+
+/* ===== Base ===== */
+* { box-sizing: border-box; }
 
 body {
-    font-family: Roboto;
-    font-size: var(--bs-body-font-size);
+    font-family: var(--font);
+    font-size: 0.9375rem;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    margin: 0;
+    padding: 0;
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
 }
 
-/* Hide number input spinners/arrows */
+/* ===== Typography ===== */
+h1, h2, h3, h4, h5, h6 {
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+    margin-top: 0;
+}
+h4 { font-size: 1.25rem; margin-bottom: 0.75rem; }
+h5 { font-size: 1.05rem; color: var(--text-secondary); }
+p  { color: var(--text-secondary); }
+
+/* ===== Sidebar ===== */
+#sidebar {
+    background-color: var(--bg-sidebar) !important;
+    color: var(--text-primary) !important;
+    border-right: 1px solid var(--border-color);
+    box-shadow: none !important;
+    transition: background-color var(--transition), border-color var(--transition);
+}
+#sidebar h1 {
+    font-size: 1.5rem !important;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    color: var(--text-primary);
+}
+#sidebar hr { border-color: var(--hr-color) !important; opacity: 1; }
+
+/* ===== Navigation ===== */
+#sidebar .nav-link {
+    color: var(--text-secondary) !important;
+    font-size: 0.9375rem !important;
+    font-weight: 500;
+    padding: 0.5rem 0.875rem !important;
+    margin: 2px 0;
+    border-radius: var(--radius-sm) !important;
+    transition: all var(--transition);
+    background: transparent !important;
+}
+#sidebar .nav-link:hover {
+    color: var(--text-primary) !important;
+    background-color: var(--nav-hover-bg) !important;
+}
+#sidebar .nav-link.active {
+    color: var(--nav-active-color) !important;
+    background-color: var(--nav-active-bg) !important;
+    font-weight: 600;
+}
+
+/* ===== Content & Main Layout ===== */
+#main-layout {
+    background-color: var(--bg-primary);
+    min-height: 100vh;
+    transition: background-color var(--transition);
+}
+#page-content {
+    background-color: var(--bg-primary) !important;
+    color: var(--text-primary) !important;
+    transition: background-color var(--transition), color var(--transition);
+}
+
+/* ===== Cards ===== */
+.card {
+    background-color: var(--bg-card) !important;
+    border: 1px solid var(--border-color) !important;
+    border-radius: var(--radius) !important;
+    box-shadow: var(--shadow-sm) !important;
+    padding: 16px;
+    transition: background-color var(--transition), border-color var(--transition), box-shadow var(--transition);
+    overflow: hidden;
+}
+.card:hover { box-shadow: var(--shadow) !important; }
+
+/* ===== KPI Boxes ===== */
+.kpi-box {
+    display: inline-block;
+    width: 23%;
+    padding: 0 12px;
+    margin-bottom: 12px;
+    vertical-align: top;
+}
+.kpi-inner {
+    border-radius: var(--radius);
+    padding: 16px 20px;
+    color: var(--kpi-text);
+    box-shadow: var(--shadow-sm);
+    transition: all var(--transition);
+}
+.kpi-inner:hover {
+    box-shadow: var(--shadow);
+    transform: translateY(-1px);
+}
+.kpi-label {
+    font-size: 0.8125rem;
+    font-weight: 600;
+    opacity: 0.9;
+    margin-bottom: 4px;
+    letter-spacing: 0.01em;
+}
+.kpi-value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+}
+
+/* ===== Horizontal Rules ===== */
+hr {
+    border: none;
+    border-top: 1px solid var(--hr-color);
+    margin: 20px 0;
+    opacity: 1;
+}
+
+/* ===== DataTables ===== */
+.dash-table-container .dash-spreadsheet-container {
+    border-radius: var(--radius-sm) !important;
+    overflow: hidden;
+}
+
+.dark-mode .dash-table-container td,
+.dark-mode .dash-table-container th,
+.dark-mode .dash-table-container .cell-table,
+.dark-mode .dash-spreadsheet-inner td,
+.dark-mode .dash-spreadsheet-inner th {
+    background-color: var(--bg-card) !important;
+    color: var(--text-primary) !important;
+    border-color: var(--border-color) !important;
+}
+.dark-mode .dash-table-container .dash-header,
+.dark-mode .dash-spreadsheet-inner .header {
+    background-color: var(--table-header-bg) !important;
+    color: var(--table-header-fg) !important;
+}
+.dark-mode .dash-table-container input,
+.dark-mode .dash-spreadsheet-inner input {
+    background-color: var(--bg-input) !important;
+    color: var(--text-primary) !important;
+    border-color: var(--border-color) !important;
+}
+/* Stripe rows in dark mode */
+.dark-mode .dash-table-container tr:nth-child(odd) td {
+    background-color: var(--table-stripe) !important;
+}
+/* Filter row */
+.dark-mode .dash-table-container .dash-filter {
+    background-color: var(--bg-input) !important;
+    color: var(--text-primary) !important;
+}
+
+/* ===== Plotly Graphs — Dark Mode ===== */
+.dark-mode .js-plotly-plot .main-svg {
+    background: transparent !important;
+}
+.dark-mode .js-plotly-plot .main-svg text {
+    fill: var(--text-primary) !important;
+}
+.dark-mode .js-plotly-plot .main-svg .gtitle {
+    fill: var(--text-primary) !important;
+}
+.dark-mode .js-plotly-plot .main-svg .xtick text,
+.dark-mode .js-plotly-plot .main-svg .ytick text {
+    fill: var(--text-secondary) !important;
+}
+.dark-mode .js-plotly-plot .gridlayer line {
+    stroke: rgba(255, 255, 255, 0.06) !important;
+}
+.dark-mode .js-plotly-plot .zerolinelayer line {
+    stroke: rgba(255, 255, 255, 0.12) !important;
+}
+.dark-mode .js-plotly-plot .main-svg .xlines,
+.dark-mode .js-plotly-plot .main-svg .ylines {
+    stroke: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* ===== Inputs ===== */
+input, select, textarea {
+    font-family: var(--font);
+    background-color: var(--bg-input);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    transition: all var(--transition);
+    outline: none;
+}
+input:focus, select:focus, textarea:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.15);
+}
+.dark-mode input,
+.dark-mode select,
+.dark-mode textarea {
+    background-color: var(--bg-input);
+    color: var(--text-primary);
+    border-color: rgba(255, 255, 255, 0.12);
+}
+.dark-mode input:focus,
+.dark-mode select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.2);
+}
+
+/* Hide number input spinners */
 input[type=number]::-webkit-inner-spin-button,
 input[type=number]::-webkit-outer-spin-button {
     -webkit-appearance: none;
     margin: 0;
 }
-input[type=number] {
-    -moz-appearance: textfield;
+input[type=number] { -moz-appearance: textfield; }
+
+/* ===== Buttons ===== */
+button, .btn {
+    font-family: var(--font);
+    border-radius: var(--radius-sm);
+    font-weight: 500;
+    transition: all var(--transition);
+    cursor: pointer;
+}
+button:hover { opacity: 0.85; }
+
+/* ===== Dark Mode Switch ===== */
+.dark-mode .form-check-label {
+    color: var(--text-secondary) !important;
+}
+
+/* ===== Scrollbar ===== */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 4px; }
+.dark-mode ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); }
+
+/* ===== Labels ===== */
+label {
+    font-size: 0.8125rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+    display: block;
 }

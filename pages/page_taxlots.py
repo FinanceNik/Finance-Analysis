@@ -87,10 +87,10 @@ def layout():
 
     # KPI row
     kpis = html.Div([
-        Styles.kpiboxes("Total Cost Basis:", f"{summary['total_cost']:,.0f}", Styles.colorPalette[0]),
-        Styles.kpiboxes("Total Market Value:", f"{summary['total_mv']:,.0f}", Styles.colorPalette[1]),
-        Styles.kpiboxes("Total Gains:", f"{summary['gainers']:,.0f}", Styles.strongGreen),
-        Styles.kpiboxes("Total Losses:", f"{summary['losers']:,.0f}", Styles.strongRed),
+        Styles.kpiboxes("Total Cost Basis", f"{summary['total_cost']:,.0f}", Styles.colorPalette[0]),
+        Styles.kpiboxes("Total Market Value", f"{summary['total_mv']:,.0f}", Styles.colorPalette[1]),
+        Styles.kpiboxes("Total Gains", f"{summary['gainers']:,.0f}", Styles.strongGreen),
+        Styles.kpiboxes("Total Losses", f"{summary['losers']:,.0f}", Styles.strongRed),
     ])
 
     # Data table
@@ -116,7 +116,8 @@ def layout():
         style_table={"overflowX": "auto"},
         style_cell={"padding": "8px", "textAlign": "left", "fontSize": "13px"},
         style_header={"backgroundColor": Styles.colorPalette[0], "color": "white",
-                       "fontWeight": "bold", "fontSize": "13px"},
+                       "fontWeight": "bold", "fontSize": "13px",
+                       "fontFamily": Styles.GRAPH_LAYOUT['font']['family']},
         style_data_conditional=[
             {"if": {"filter_query": "{gain_loss} > 0", "column_id": "gain_loss"},
              "backgroundColor": "#e6ffe6", "color": "green"},
@@ -150,12 +151,12 @@ def layout():
             'text': [f"{v:+,.0f} ({p:+.1f}%)" for v, p in zip(by_symbol['total_gl'], by_symbol['gl_pct'])],
             'textposition': 'outside',
         }],
-        'layout': {
-            'title': 'FIFO Gain/Loss by Symbol',
-            'xaxis': {'title': 'Gain/Loss'},
-            'margin': {'t': 40, 'b': 40, 'l': 100, 'r': 100},
-            'height': max(300, len(by_symbol) * 30),
-        }
+        'layout': Styles.graph_layout(
+            title='FIFO Gain/Loss by Symbol',
+            xaxis={'title': 'Gain/Loss'},
+            margin={'l': 100, 'r': 100},
+            height=max(300, len(by_symbol) * 30),
+        )
     }
 
     return html.Div([
@@ -166,9 +167,9 @@ def layout():
 
         html.Div([
             dcc.Graph(id='tax-lot-gl-chart', figure=gl_chart)
-        ], style=Styles.STYLE(100)),
+        ], className="card", style=Styles.STYLE(100)),
         html.Hr(),
 
         html.H5("Individual Tax Lots"),
-        html.Div([table], style={**Styles.STYLE(100), "marginBottom": "20px"}),
+        html.Div([table], className="card", style={**Styles.STYLE(100), "marginBottom": "20px"}),
     ])

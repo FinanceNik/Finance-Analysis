@@ -44,7 +44,7 @@ def layout():
                 dcc.Graph(id='proj-monte-carlo-chart'),
                 type="circle",
             )
-        ], style=Styles.STYLE(100))
+        ], className="card", style=Styles.STYLE(100))
     ])
 
 
@@ -93,14 +93,13 @@ def register_callbacks(app):
 
         figure = {
             'data': traces,
-            'layout': {
-                'title': f'Monte Carlo Simulation ({runs} runs, {expected_return}% return, {volatility}% vol)',
-                'xaxis': {'title': 'Year', 'range': [0, time_horizon]},
-                'yaxis': {
+            'layout': Styles.graph_layout(
+                title=f'Monte Carlo Simulation ({runs} runs, {expected_return}% return, {volatility}% vol)',
+                xaxis={'title': 'Year', 'range': [0, time_horizon]},
+                yaxis={
                     'title': 'Portfolio Value',
                     'range': [0, monte_carlo_df.mean(axis=1).max() * 2]
                 },
-                'margin': {'t': 40, 'b': 40, 'l': 60, 'r': 40},
-            }
+            ),
         }
         return figure

@@ -18,14 +18,14 @@ app = dash.Dash(__name__, suppress_callback_exceptions=True,
 
 sidebar = html.Div(
     [
-        html.H1(f"Wealth\nAnalysis", style={'fontSize': '32px', 'fontWeight': 'bold'}),
-        html.Hr(style={'borderColor': Styles.greys[3]}),
+        html.H1("Wealth\nAnalysis"),
+        html.Hr(),
         dbc.Switch(
             id="theme-switch",
             label="Dark mode",
             value=False,
         ),
-        html.Hr(style={'borderColor': Styles.greys[3]}),
+        html.Hr(),
         dbc.Nav(
             [
                 dbc.NavLink("Net Worth", href=f"{basePath}/net-worth", active="exact"),
@@ -50,7 +50,7 @@ sidebar = html.Div(
 content = html.Div(id="page-content", style=Styles.CONTENT_STYLE)
 
 app.layout = html.Div(
-    [dcc.Location(id="url", refresh=True),
+    [dcc.Location(id="url", refresh=False),
      dcc.Store(id="theme-store", storage_type='session'),
      sidebar,
      content
@@ -62,13 +62,14 @@ app.layout = html.Div(
 @app.callback(
     [Output("sidebar", "style"),
      Output("page-content", "style"),
+     Output("main-layout", "className"),
      Output("theme-store", "data")],
     [Input("theme-switch", "value")]
 )
 def toggle_dark_mode(dark_mode):
     if dark_mode:
-        return Styles.SIDEBAR_STYLE_DARK, Styles.CONTENT_STYLE_DARK, True
-    return Styles.SIDEBAR_STYLE, Styles.CONTENT_STYLE, False
+        return Styles.SIDEBAR_STYLE_DARK, Styles.CONTENT_STYLE_DARK, "dark-mode", True
+    return Styles.SIDEBAR_STYLE, Styles.CONTENT_STYLE, "", False
 
 
 # --- Page routing ---

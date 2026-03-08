@@ -129,12 +129,11 @@ def register_callbacks(app):
                     'textposition': 'outside',
                 },
             ],
-            'layout': {
-                'title': 'Current vs Target Allocation',
-                'barmode': 'group',
-                'yaxis': {'title': 'Allocation (%)'},
-                'margin': {'t': 40, 'b': 60, 'l': 40, 'r': 40},
-            }
+            'layout': Styles.graph_layout(
+                title='Current vs Target Allocation',
+                barmode='group',
+                yaxis={'title': 'Allocation (%)'},
+            )
         }
 
         # Trade suggestions
@@ -150,11 +149,10 @@ def register_callbacks(app):
                 'text': [f"{'Buy' if d > 0 else 'Sell'} {abs(d):,.0f}" for d in diffs],
                 'textposition': 'outside',
             }],
-            'layout': {
-                'title': 'Suggested Trades to Rebalance',
-                'yaxis': {'title': 'Amount to Buy (+) / Sell (-)'},
-                'margin': {'t': 40, 'b': 60, 'l': 60, 'r': 40},
-            }
+            'layout': Styles.graph_layout(
+                title='Suggested Trades to Rebalance',
+                yaxis={'title': 'Amount to Buy (+) / Sell (-)'},
+            )
         }
 
         # Drift indicator
@@ -165,15 +163,15 @@ def register_callbacks(app):
 
         return html.Div([
             html.Div([
-                Styles.kpiboxes("Portfolio Value:", f"{total:,}", Styles.colorPalette[0]),
-                Styles.kpiboxes("Total Drift:", f"{total_drift:.1f}%", drift_color),
+                Styles.kpiboxes("Portfolio Value", f"{total:,}", Styles.colorPalette[0]),
+                Styles.kpiboxes("Total Drift", f"{total_drift:.1f}%", drift_color),
             ]),
             html.Hr(),
             html.Div([
                 dcc.Graph(id='rebal-comparison-chart', figure=comparison_chart)
-            ], style=Styles.STYLE(48)),
+            ], className="card", style=Styles.STYLE(48)),
             html.Div([''], style=Styles.FILLER()),
             html.Div([
                 dcc.Graph(id='rebal-trade-chart', figure=trade_chart)
-            ], style=Styles.STYLE(48)),
+            ], className="card", style=Styles.STYLE(48)),
         ])

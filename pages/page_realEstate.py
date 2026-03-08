@@ -68,7 +68,7 @@ def layout():
                 dcc.Graph(id='re-projection-chart'),
                 type="circle",
             )
-        ], style=Styles.STYLE(100))
+        ], className="card", style=Styles.STYLE(100))
     ])
 
 
@@ -107,10 +107,10 @@ def register_callbacks(app):
         net_profit = total_appreciation + total_income - total_costs
 
         kpis = html.Div([
-            Styles.kpiboxes('Property Value:', f"{starting_value:,.0f}", Styles.colorPalette[0]),
-            Styles.kpiboxes('Annual Net Cash Flow:', f"{annual_income - annual_costs:,.0f}", Styles.colorPalette[1]),
-            Styles.kpiboxes(f'Value After {years}y:', f"{final_value:,.0f}", Styles.colorPalette[2]),
-            Styles.kpiboxes(f'Total Net Profit:', f"{net_profit:,.0f}", Styles.colorPalette[3]),
+            Styles.kpiboxes('Property Value', f"{starting_value:,.0f}", Styles.colorPalette[0]),
+            Styles.kpiboxes('Annual Net Cash Flow', f"{annual_income - annual_costs:,.0f}", Styles.colorPalette[1]),
+            Styles.kpiboxes(f'Value After {years}y', f"{final_value:,.0f}", Styles.colorPalette[2]),
+            Styles.kpiboxes('Total Net Profit', f"{net_profit:,.0f}", Styles.colorPalette[3]),
         ])
 
         figure = {
@@ -140,12 +140,11 @@ def register_callbacks(app):
                     'marker': {'color': Styles.colorPalette[0]}
                 },
             ],
-            'layout': {
-                'title': f'Real Estate Projection Over {years} Years',
-                'xaxis': {'title': 'Year'},
-                'yaxis': {'title': 'CHF'},
-                'margin': {'t': 40, 'b': 40, 'l': 60, 'r': 40},
-            }
+            'layout': Styles.graph_layout(
+                title=f'Real Estate Projection Over {years} Years',
+                xaxis={'title': 'Year'},
+                yaxis={'title': 'CHF'},
+            ),
         }
 
         return kpis, figure
