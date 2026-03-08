@@ -35,7 +35,7 @@ def layout():
                 html.Br(),
                 html.Button("Add Goal", id="goal-add-btn",
                             style={"padding": "8px 20px", "backgroundColor": Styles.colorPalette[0],
-                                   "color": "white", "border": "none", "borderRadius": "5px",
+                                   "color": "white", "border": "none", "borderRadius": "8px",
                                    "cursor": "pointer", "fontSize": "14px"}),
             ], style={"width": "10%", "display": "inline-block", "padding": "10px 15px",
                        "verticalAlign": "bottom"}),
@@ -79,11 +79,7 @@ def _build_goal_card(goal, idx):
                     "borderRadius": "12px",
                     "transition": "width 0.3s",
                 }),
-            ], style={
-                "width": "100%", "backgroundColor": "#e0e0e0",
-                "borderRadius": "12px", "overflow": "hidden",
-                "marginBottom": "8px",
-            }),
+            ], className="progress-track"),
             html.Div([
                 html.Span(f"{current:,.0f} / {target:,.0f}  ({pct:.0%})",
                           style={"fontSize": "14px", "fontWeight": "bold"}),
@@ -91,11 +87,12 @@ def _build_goal_card(goal, idx):
                           style={"fontSize": "13px", "color": "#666"}),
             ]),
         ], style={"padding": "15px"}),
-    ], style={
-        **Styles.STYLE(30),
+    ], className="card", style={
+        "width": "30%",
+        "display": "inline-block",
+        "verticalAlign": "top",
         "marginRight": "15px",
         "marginBottom": "15px",
-        "verticalAlign": "top",
     })
 
 
@@ -138,10 +135,10 @@ def register_callbacks(app):
         overall_pct = total_current / total_target if total_target > 0 else 0
 
         kpis = html.Div([
-            Styles.kpiboxes("Total Goal Target:", f"{total_target:,.0f}", Styles.colorPalette[0]),
-            Styles.kpiboxes("Total Saved:", f"{total_current:,.0f}", Styles.colorPalette[1]),
-            Styles.kpiboxes("Monthly Savings:", f"{total_monthly:,.0f}", Styles.colorPalette[2]),
-            Styles.kpiboxes("Overall Progress:", f"{overall_pct:.0%}", Styles.colorPalette[3]),
+            Styles.kpiboxes("Total Goal Target", f"{total_target:,.0f}", Styles.colorPalette[0]),
+            Styles.kpiboxes("Total Saved", f"{total_current:,.0f}", Styles.colorPalette[1]),
+            Styles.kpiboxes("Monthly Savings", f"{total_monthly:,.0f}", Styles.colorPalette[2]),
+            Styles.kpiboxes("Overall Progress", f"{overall_pct:.0%}", Styles.colorPalette[3]),
         ])
 
         cards = [_build_goal_card(g, i) for i, g in enumerate(goals)]

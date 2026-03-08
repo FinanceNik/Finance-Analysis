@@ -1,4 +1,5 @@
 import os
+import glob
 import logging
 import pandas as pd
 from datetime import datetime
@@ -9,7 +10,16 @@ logger = logging.getLogger(__name__)
 currentYear = int(datetime.today().strftime('%Y'))
 months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
-_transactions_filepath = "data/transactions-from-30122022-to-09012026.csv"
+
+def _find_latest_transactions_file() -> str:
+    """Find the most recent transactions CSV in the data directory."""
+    files = glob.glob("data/transactions-from-*.csv")
+    if not files:
+        return ""
+    return max(files, key=os.path.getmtime)
+
+
+_transactions_filepath = _find_latest_transactions_file()
 
 
 def set_transactions_filepath(path: str):
@@ -24,7 +34,7 @@ def ingest_transactions() -> pd.DataFrame:
         logger.warning("Transactions file not found: %s", _transactions_filepath)
         return pd.DataFrame()
 
-    df = pd.read_csv(_transactions_filepath, sep=";")
+    df = pd.read_csv(_transactions_filepath, sep=";", encoding="latin-1")
     df.columns = (
         df.columns
         .str.strip()

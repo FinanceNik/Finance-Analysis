@@ -34,7 +34,8 @@ def _build_holdings_table(df):
         style_table={"overflowX": "auto"},
         style_cell={"padding": "8px", "textAlign": "left", "fontSize": "14px"},
         style_header={"backgroundColor": Styles.colorPalette[0], "color": "white",
-                       "fontWeight": "bold", "fontSize": "14px"},
+                       "fontWeight": "bold", "fontSize": "14px",
+                       "fontFamily": Styles.GRAPH_LAYOUT['font']['family']},
         style_data_conditional=[
             {"if": {"row_index": "odd"}, "backgroundColor": "#f9f9f9"},
         ],
@@ -58,7 +59,7 @@ def layout():
                 style={
                     'width': '100%', 'height': '50px', 'lineHeight': '50px',
                     'borderWidth': '1px', 'borderStyle': 'dashed',
-                    'borderRadius': '5px', 'textAlign': 'center',
+                    'borderRadius': '12px', 'textAlign': 'center',
                     'margin': '10px 0'
                 },
                 multiple=False
@@ -70,16 +71,16 @@ def layout():
 
         # --- KPI boxes ---
         html.Div([
-            Styles.kpiboxes('Total Value:',
+            Styles.kpiboxes('Total Value',
                             f"{dlp.portfolio_total_value():,}",
                             Styles.colorPalette[0]),
-            Styles.kpiboxes('Total Pur.-Cost:',
+            Styles.kpiboxes('Total Pur.-Cost',
                             f"{dlp.portfolio_cost_basis():,}",
                             Styles.colorPalette[1]),
-            Styles.kpiboxes('Total Unr. Gains:',
+            Styles.kpiboxes('Total Unr. Gains',
                             f"{dlp.portfolio_unrealized_pnl():,}",
                             Styles.colorPalette[2]),
-            Styles.kpiboxes('Total % Return:',
+            Styles.kpiboxes('Total % Return',
                             f"{dlp.portfolio_return_pct():.1%}",
                             Styles.colorPalette[3]),
         ]),
@@ -89,13 +90,11 @@ def layout():
         html.H4("Holdings"),
         html.Div([
             _build_holdings_table(df),
-        ], style={**Styles.STYLE(100), "marginBottom": "20px"}),
+        ], className="card", style={**Styles.STYLE(100), "marginBottom": "20px"}),
         html.Hr(),
 
         # --- Charts row ---
-        html.Div([''], style=Styles.FILLER()),
         html.Div([
-            html.H4(f"{dlp.currentYear}"),
             dcc.Graph(
                 id='asset-type-pie',
                 figure={
@@ -105,18 +104,15 @@ def layout():
                         'values': dlp.allocation_by_asset_type()['weight'].tolist(),
                         'textinfo': 'label+percent',
                         'hoverinfo': 'label+value+percent',
+                        'hole': 0.35,
                         'marker': {'colors': Styles.colorPalette},
                     }],
-                    'layout': {
-                        'title': f'Asset Type Allocation in {dlp.currentYear}',
-                        'margin': {'t': 30, 'b': 30, 'l': 30, 'r': 30},
-                    }
+                    'layout': Styles.graph_layout(title='Asset Type Allocation')
                 }
             )
-        ], style=Styles.STYLE(30)),
+        ], className="card", style=Styles.STYLE(30)),
         html.Div([''], style=Styles.FILLER()),
         html.Div([
-            html.H4(f"{dlp.currentYear}"),
             dcc.Graph(
                 id='geography-pie',
                 figure={
@@ -126,18 +122,15 @@ def layout():
                         'values': dlp.allocation_by_geography()['weight'].tolist(),
                         'textinfo': 'label+percent',
                         'hoverinfo': 'label+value+percent',
+                        'hole': 0.35,
                         'marker': {'colors': Styles.colorPalette},
                     }],
-                    'layout': {
-                        'title': f'Geography Allocation in {dlp.currentYear}',
-                        'margin': {'t': 30, 'b': 30, 'l': 30, 'r': 30},
-                    }
+                    'layout': Styles.graph_layout(title='Geography Allocation')
                 }
             )
-        ], style=Styles.STYLE(30)),
+        ], className="card", style=Styles.STYLE(30)),
         html.Div([''], style=Styles.FILLER()),
         html.Div([
-            html.H4(f"{dlp.currentYear}"),
             dcc.Graph(
                 id='currency-pie',
                 figure={
@@ -147,21 +140,19 @@ def layout():
                         'values': dlp.allocation_by_currency()['weight'].tolist(),
                         'textinfo': 'label+percent',
                         'hoverinfo': 'label+value+percent',
+                        'hole': 0.35,
                         'marker': {'colors': Styles.colorPalette},
                     }],
-                    'layout': {
-                        'title': f'Currency Exposure in {dlp.currentYear}',
-                        'margin': {'t': 30, 'b': 30, 'l': 30, 'r': 30},
-                    }
+                    'layout': Styles.graph_layout(title='Currency Exposure')
                 }
             )
-        ], style=Styles.STYLE(30)),
+        ], className="card", style=Styles.STYLE(30)),
         html.Hr(),
 
         # --- Historical price chart ---
         html.Div([
             dcc.Graph(id='historical-prices-chart')
-        ], style=Styles.STYLE(100))
+        ], className="card", style=Styles.STYLE(100))
     ])
 
 
@@ -197,7 +188,7 @@ def register_callbacks(app):
         try:
             df = pd.read_csv("data/historical_data.csv")
         except FileNotFoundError:
-            return {'data': [], 'layout': {'title': 'No historical data available'}}
+            return {'data': [], 'layout': Styles.graph_layout(title='No historical data available')}
 
         # Use date column if present, otherwise fall back to index
         x_values = df["date"].tolist() if "date" in df.columns else df.index.tolist()
@@ -214,10 +205,9 @@ def register_callbacks(app):
         ]
         return {
             'data': traces,
-            'layout': {
-                'title': 'Historical Prices (log scale)',
-                'xaxis': {'title': 'Date', 'type': 'date' if 'date' in df.columns else 'linear'},
-                'yaxis': {'title': 'Log Price'},
-                'margin': {'t': 40, 'b': 40, 'l': 40, 'r': 40},
-            }
+            'layout': Styles.graph_layout(
+                title='Historical Prices (log scale)',
+                xaxis={'title': 'Date', 'type': 'date' if 'date' in df.columns else 'linear'},
+                yaxis={'title': 'Log Price'},
+            )
         }

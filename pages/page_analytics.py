@@ -1,21 +1,30 @@
 import numpy as np
 import pandas as pd
 from dash import dcc, html, Input, Output
+from datetime import datetime
 import Styles
 import config
 import dataLoadPositions as dlp
+import dataLoadTransactions as dlt
 
 
 def _compute_analytics():
     """Compute per-holding analytics and portfolio-level metrics."""
     df = dlp.add_position_pnl_columns()
     if df.empty:
-        return df, {}
+        return df, {}, pd.DataFrame()
 
     total_mv = df["market_value"].sum()
     df["weight"] = df["market_value"] / total_mv
 
-    # Try to load historical data for Sharpe ratio
+    # --- Historical data for Sharpe, Sortino, and Drawdown ---
+    portfolio_sharpe = None
+    portfolio_return = None
+    portfolio_vol = None
+    sortino_ratio = None
+    max_drawdown = None
+    drawdown_series = pd.DataFrame()
+
     try:
         hist = pd.read_csv("data/historical_data.csv")
         if "date" in hist.columns:
@@ -30,19 +39,101 @@ def _compute_analytics():
         portfolio_vol = annual_vol.mean()
         portfolio_sharpe = ((portfolio_return - config.RISK_FREE_RATE) / portfolio_vol
                             if portfolio_vol > 0 else None)
+
+        # --- Sortino Ratio ---
+        try:
+            portfolio_daily = daily_returns.mean(axis=1)
+            negative_returns = portfolio_daily[portfolio_daily < 0]
+            if len(negative_returns) > 1:
+                downside_deviation = negative_returns.std() * np.sqrt(252)
+                if downside_deviation > 0:
+                    sortino_ratio = (portfolio_return - config.RISK_FREE_RATE) / downside_deviation
+        except Exception:
+            sortino_ratio = None
+
+        # --- Max Drawdown from portfolio average ---
+        try:
+            portfolio_avg = hist.mean(axis=1).dropna()
+            running_max = portfolio_avg.cummax()
+            drawdown = (portfolio_avg - running_max) / running_max
+            max_drawdown = drawdown.min()
+            # Build drawdown series for chart
+            drawdown_series = pd.DataFrame({
+                "date": drawdown.index,
+                "drawdown": (drawdown * 100).values,
+            })
+        except Exception:
+            max_drawdown = None
+            drawdown_series = pd.DataFrame()
     except Exception:
-        portfolio_sharpe = None
-        portfolio_return = None
-        portfolio_vol = None
+        pass
+
+    # --- CAGR from transaction history ---
+    cagr = None
+    try:
+        txn_df = dlt.ingest_transactions()
+        if not txn_df.empty and "date" in txn_df.columns and "transaction" in txn_df.columns:
+            buys = txn_df[txn_df["transaction"].str.lower() == "buy"]
+            if not buys.empty:
+                first_buy_date = buys["date"].min()
+                today = datetime.today()
+                years = (today - first_buy_date).days / 365.25
+                current_value = dlp.portfolio_total_value()
+                total_invested = dlp.portfolio_cost_basis()
+                if years > 0 and total_invested > 0 and current_value > 0:
+                    cagr = (current_value / total_invested) ** (1 / years) - 1
+    except Exception:
+        cagr = None
+
+    # --- Concentration Risk (Herfindahl Index) ---
+    hhi = None
+    effective_positions = None
+    try:
+        weights = df["weight"].values
+        hhi = float(np.sum(weights ** 2))
+        if hhi > 0:
+            effective_positions = 1.0 / hhi
+    except Exception:
+        hhi = None
+        effective_positions = None
+
+    # --- Dividend Growth Rate (YoY) ---
+    div_growth = None
+    try:
+        current_year = datetime.today().year
+        div_this_year = dlt.total_transaction_amount(current_year, "Dividend")
+        div_last_year = dlt.total_transaction_amount(current_year - 1, "Dividend")
+        # Annualize current year dividends if not full year yet
+        today = datetime.today()
+        day_of_year = today.timetuple().tm_yday
+        days_in_year = 366 if (current_year % 4 == 0 and (current_year % 100 != 0 or current_year % 400 == 0)) else 365
+        if day_of_year > 30 and div_this_year != 0:
+            annualized_this_year = div_this_year * (days_in_year / day_of_year)
+        else:
+            annualized_this_year = div_this_year
+        if div_last_year != 0 and abs(div_last_year) > 0:
+            div_growth = (annualized_this_year / div_last_year - 1) * 100
+    except Exception:
+        div_growth = None
 
     metrics = {
         "sharpe": round(portfolio_sharpe, 2) if portfolio_sharpe is not None else "N/A",
         "annual_return": f"{portfolio_return * 100:.1f}%" if portfolio_return is not None else "N/A",
         "annual_vol": f"{portfolio_vol * 100:.1f}%" if portfolio_vol is not None else "N/A",
         "total_mv": int(total_mv),
+        # New KPIs
+        "cagr": f"{cagr * 100:.1f}%" if cagr is not None else "N/A",
+        "max_drawdown": f"{max_drawdown * 100:.1f}%" if max_drawdown is not None else "N/A",
+        "sortino": round(sortino_ratio, 2) if sortino_ratio is not None else "N/A",
+        "concentration": (
+            f"{hhi:.2f} ({effective_positions:.0f} eff. pos.)"
+            if hhi is not None and effective_positions is not None
+            else "N/A"
+        ),
+        "div_growth": f"{div_growth:+.1f}%" if div_growth is not None else "N/A",
     }
 
-    return df, metrics
+    return df, metrics, drawdown_series
 
 
 def _build_expense_ratio_section(df):
@@ -77,9 +168,11 @@ def _build_expense_ratio_section(df):
             'textposition': 'outside',
         }],
         'layout': {
-            'title': f'ETF Annual Costs (Weighted TER: {weighted_ter:.2%}, Total: {total_annual_cost:,.0f}/yr)',
-            'xaxis': {'title': 'Annual Cost'},
-            'margin': {'t': 40, 'b': 40, 'l': 120, 'r': 80},
+            **Styles.graph_layout(
+                title=f'ETF Annual Costs (Weighted TER: {weighted_ter:.2%}, Total: {total_annual_cost:,.0f}/yr)',
+                xaxis={'title': 'Annual Cost'},
+                margin={'t': 40, 'b': 40, 'l': 120, 'r': 80},
+            ),
             'height': max(250, len(etfs_with_ter) * 35),
         }
     }
@@ -88,7 +181,7 @@ def _build_expense_ratio_section(df):
         html.Hr(),
         html.Div([
             dcc.Graph(id='expense-ratio-chart', figure=chart)
-        ], style=Styles.STYLE(100)),
+        ], className="card", style=Styles.STYLE(100)),
     ])
 
 
@@ -125,18 +218,17 @@ def _build_currency_impact(df):
                 'marker': {'color': colors},
             },
         ],
-        'layout': {
-            'title': 'Performance by Currency',
-            'barmode': 'group',
-            'xaxis': {'title': 'Currency'},
-            'yaxis': {'title': 'Value'},
-            'margin': {'t': 40, 'b': 40, 'l': 60, 'r': 40},
-        }
+        'layout': Styles.graph_layout(
+            title='Performance by Currency',
+            barmode='group',
+            xaxis={'title': 'Currency'},
+            yaxis={'title': 'Value'},
+        ),
     }
 
     return html.Div([
         dcc.Graph(id='currency-impact-chart', figure=chart)
-    ], style=Styles.STYLE(48))
+    ], className="card", style=Styles.STYLE(48))
 
 
 def _build_benchmark_section():
@@ -184,22 +276,51 @@ def _build_benchmark_section():
 
     chart = {
         'data': traces,
-        'layout': {
-            'title': 'Normalized Performance (Base = 100)',
-            'xaxis': {'title': 'Date', 'type': 'date'},
-            'yaxis': {'title': 'Indexed Value'},
-            'margin': {'t': 40, 'b': 40, 'l': 60, 'r': 40},
-            'hovermode': 'x unified',
-        }
+        'layout': Styles.graph_layout(
+            title='Normalized Performance (Base = 100)',
+            xaxis={'title': 'Date', 'type': 'date'},
+            yaxis={'title': 'Indexed Value'},
+            hovermode='x unified',
+        ),
     }
 
     return html.Div([
         dcc.Graph(id='benchmark-chart', figure=chart)
-    ], style=Styles.STYLE(100))
+    ], className="card", style=Styles.STYLE(100))
+
+
+def _build_drawdown_chart(drawdown_series):
+    """Build a filled area chart showing portfolio drawdown over time."""
+    if drawdown_series.empty:
+        return html.Div()
+
+    chart = {
+        'data': [{
+            'type': 'scatter',
+            'x': drawdown_series['date'].tolist(),
+            'y': drawdown_series['drawdown'].round(2).tolist(),
+            'mode': 'lines',
+            'fill': 'tozeroy',
+            'fillcolor': 'rgba(255, 59, 48, 0.3)',
+            'line': {'color': Styles.strongRed, 'width': 1.5},
+            'name': 'Drawdown',
+            'hovertemplate': '%{x}<br>Drawdown: %{y:.2f}%<extra></extra>',
+        }],
+        'layout': Styles.graph_layout(
+            title='Portfolio Drawdown Over Time',
+            xaxis={'title': 'Date', 'type': 'date'},
+            yaxis={'title': 'Drawdown (%)', 'ticksuffix': '%'},
+            hovermode='x unified',
+        ),
+    }
+
+    return html.Div([
+        dcc.Graph(id='drawdown-chart', figure=chart)
+    ], className="card", style=Styles.STYLE(100))
 
 
 def layout():
-    df, metrics = _compute_analytics()
+    df, metrics, drawdown_series = _compute_analytics()
 
     if df.empty:
         return html.Div([
@@ -207,12 +328,21 @@ def layout():
             html.H4("No portfolio data available."),
         ])
 
-    # --- KPI row ---
+    # --- KPI row 1 (existing) ---
     kpi_row = html.Div([
-        Styles.kpiboxes('Portfolio Sharpe:', metrics.get("sharpe", "N/A"), Styles.colorPalette[0]),
-        Styles.kpiboxes('Est. Annual Return:', metrics.get("annual_return", "N/A"), Styles.colorPalette[1]),
-        Styles.kpiboxes('Est. Annual Vol:', metrics.get("annual_vol", "N/A"), Styles.colorPalette[2]),
-        Styles.kpiboxes('Total Market Value:', f"{metrics.get('total_mv', 0):,}", Styles.colorPalette[3]),
+        Styles.kpiboxes('Portfolio Sharpe', metrics.get("sharpe", "N/A"), Styles.colorPalette[0]),
+        Styles.kpiboxes('Est. Annual Return', metrics.get("annual_return", "N/A"), Styles.colorPalette[1]),
+        Styles.kpiboxes('Est. Annual Vol', metrics.get("annual_vol", "N/A"), Styles.colorPalette[2]),
+        Styles.kpiboxes('Total Market Value', f"{metrics.get('total_mv', 0):,}", Styles.colorPalette[3]),
+    ])
+
+    # --- KPI row 2 (advanced metrics) ---
+    kpi_row_2 = html.Div([
+        Styles.kpiboxes('CAGR', metrics.get("cagr", "N/A"), Styles.colorPalette[0]),
+        Styles.kpiboxes('Max Drawdown', metrics.get("max_drawdown", "N/A"), Styles.colorPalette[1]),
+        Styles.kpiboxes('Sortino Ratio', metrics.get("sortino", "N/A"), Styles.colorPalette[2]),
+        Styles.kpiboxes('Concentration', metrics.get("concentration", "N/A"), Styles.colorPalette[3]),
+        Styles.kpiboxes('Dividend Growth', metrics.get("div_growth", "N/A"), Styles.colorPalette[0]),
     ])
 
     # --- Per-holding P&L chart ---
@@ -228,9 +358,11 @@ def layout():
             'marker': {'color': colors},
         }],
         'layout': {
-            'title': 'Unrealized P&L by Holding',
-            'xaxis': {'title': 'Unrealized P&L'},
-            'margin': {'t': 40, 'b': 40, 'l': 120, 'r': 40},
+            **Styles.graph_layout(
+                title='Unrealized P&L by Holding',
+                xaxis={'title': 'Unrealized P&L'},
+                margin={'t': 40, 'b': 40, 'l': 120, 'r': 40},
+            ),
             'height': max(300, len(df_sorted) * 28),
         }
     }
@@ -250,9 +382,11 @@ def layout():
             'textposition': 'outside',
         }],
         'layout': {
-            'title': 'Return % by Holding',
-            'xaxis': {'title': 'Return (%)'},
-            'margin': {'t': 40, 'b': 40, 'l': 120, 'r': 60},
+            **Styles.graph_layout(
+                title='Return % by Holding',
+                xaxis={'title': 'Return (%)'},
+                margin={'t': 40, 'b': 40, 'l': 120, 'r': 60},
+            ),
             'height': max(300, len(df_pct) * 28),
         }
     }
@@ -268,37 +402,42 @@ def layout():
             'text': [f"{v:.1f}%" for v in (df_top['weight'] * 100)],
             'textposition': 'outside',
         }],
-        'layout': {
-            'title': 'Top 10 Holdings by Portfolio Weight',
-            'yaxis': {'title': 'Weight (%)'},
-            'margin': {'t': 40, 'b': 80, 'l': 40, 'r': 40},
-        }
+        'layout': Styles.graph_layout(
+            title='Top 10 Holdings by Portfolio Weight',
+            yaxis={'title': 'Weight (%)'},
+            margin={'t': 40, 'b': 80, 'l': 40, 'r': 40},
+        ),
     }
 
     return html.Div([
         html.Hr(),
         html.H4("Portfolio Analytics"),
         kpi_row,
+        kpi_row_2,
         html.Hr(),
 
         # Benchmark comparison
         _build_benchmark_section(),
         html.Hr(),
 
+        # Drawdown chart
+        _build_drawdown_chart(drawdown_series),
+        html.Hr(),
+
         # Top holdings
         html.Div([
             dcc.Graph(id='top-holdings-chart', figure=weight_chart)
-        ], style=Styles.STYLE(100)),
+        ], className="card", style=Styles.STYLE(100)),
         html.Hr(),
 
         # P&L charts
         html.Div([
             dcc.Graph(id='pnl-by-holding-chart', figure=pnl_chart)
-        ], style=Styles.STYLE(48)),
+        ], className="card", style=Styles.STYLE(48)),
         html.Div([''], style=Styles.FILLER()),
         html.Div([
             dcc.Graph(id='return-by-holding-chart', figure=return_chart)
-        ], style=Styles.STYLE(48)),
+        ], className="card", style=Styles.STYLE(48)),
         html.Hr(),
 
         # Currency impact
