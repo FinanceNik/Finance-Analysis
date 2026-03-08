@@ -349,9 +349,14 @@ def register_callbacks(app):
         if growth_override is not None and growth_override != "":
             market_growth = float(growth_override) / 100
 
-        # Base: most recent year's dividends
-        base_year = hist_years[-1]
-        base_val = hist_values[-1]
+        # Base: last COMPLETE year (current year is partial, skip it)
+        current_year = dlt.currentYear
+        if hist_years[-1] == current_year and len(hist_years) >= 2:
+            base_year = hist_years[-2]
+            base_val = hist_values[-2]
+        else:
+            base_year = hist_years[-1]
+            base_val = hist_values[-1]
 
         # ── Project yearly dividends ──
         proj_years = list(range(base_year + 1, base_year + horizon + 1))
