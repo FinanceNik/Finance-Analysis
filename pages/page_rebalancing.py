@@ -1,7 +1,8 @@
-from dash import dcc, html, Input, Output, State
+from dash import dcc, html, Input, Output, State, ALL, callback_context
 import Styles
 import config
 import dataLoadPositions as dlp
+import user_settings
 
 
 def layout():
@@ -20,16 +21,20 @@ def layout():
     # Get all geographies (from current + targets)
     all_geos = sorted(set(alloc["geography"].tolist()) | set(config.DEFAULT_TARGET_ALLOCATION.keys()))
 
+    # Load saved targets
+    saved_targets = user_settings.get("rebal_targets", {})
+
     # Build input fields for target allocation
     target_inputs = []
     for geo in all_geos:
-        default = config.DEFAULT_TARGET_ALLOCATION.get(geo, 0)
+        saved_val = saved_targets.get(geo)
+        default = saved_val if saved_val is not None else config.DEFAULT_TARGET_ALLOCATION.get(geo, 0)
         target_inputs.append(
             html.Div([
                 html.Label(geo),
                 dcc.Input(
                     id={"type": "rebal-target", "geo": geo},
-                    type="number", value=default, min=0, max=100, step=1,
+                    type="number", value=default, min=0, max=100,
                     style={"width": "60px", "padding": "4px", "marginLeft": "8px"},
                 ),
                 html.Span("%", style={"marginLeft": "4px"}),
@@ -56,9 +61,9 @@ def layout():
 def register_callbacks(app):
     @app.callback(
         Output("rebal-results", "children"),
-        [Input("url", "pathname")]
+        [Input({"type": "rebal-target", "geo": ALL}, "value")]
     )
-    def update_rebalancing(_):
+    def update_rebalancing(target_values):
         df = dlp.fetch_data()
         if df.empty or "geography" not in df.columns:
             return html.P("No data available.")
@@ -66,7 +71,17 @@ def register_callbacks(app):
         total = dlp.portfolio_total_value()
         alloc = df.groupby("geography")["total_value"].sum().to_dict()
 
-        targets = config.DEFAULT_TARGET_ALLOCATION
+        # Build targets from the actual input values
+        triggered = callback_context.inputs_list[0]
+        targets = {}
+        for item in triggered:
+            geo = item["id"]["geo"]
+            val = item.get("value", 0) or 0
+            targets[geo] = val
+
+        # Save targets persistently
+        user_settings.save({"rebal_targets": targets})
+
         all_geos = sorted(set(list(alloc.keys()) + list(targets.keys())))
 
         rows = []

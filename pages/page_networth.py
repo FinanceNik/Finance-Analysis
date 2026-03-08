@@ -2,15 +2,11 @@ from dash import dcc, html, Input, Output, State
 import Styles
 import dataLoadPositions as dlp
 import dataLoadTransactions as dlt
+import user_settings
 
 
 def layout():
-    portfolio_value = dlp.portfolio_total_value()
-    cost_basis = dlp.portfolio_cost_basis()
-    unrealized_pnl = dlp.portfolio_unrealized_pnl()
-
-    # Get allocation data for the sunburst
-    df = dlp.fetch_data()
+    saved = user_settings.get("networth", {})
 
     return html.Div([
         html.Hr(),
@@ -20,27 +16,32 @@ def layout():
         html.Div([
             html.Div([
                 html.Label("Real Estate Value"),
-                dcc.Input(id="nw-real-estate", type="number", value=0, step=10000,
+                dcc.Input(id="nw-real-estate", type="number",
+                          value=saved.get("real_estate", 0),
                           style={"width": "100%", "padding": "6px"}),
             ], style={"width": "18%", "display": "inline-block", "padding": "10px 15px"}),
             html.Div([
                 html.Label("Cash & Savings"),
-                dcc.Input(id="nw-cash", type="number", value=0, step=1000,
+                dcc.Input(id="nw-cash", type="number",
+                          value=saved.get("cash", 0),
                           style={"width": "100%", "padding": "6px"}),
             ], style={"width": "18%", "display": "inline-block", "padding": "10px 15px"}),
             html.Div([
                 html.Label("Pension / 2nd Pillar"),
-                dcc.Input(id="nw-pension", type="number", value=0, step=5000,
+                dcc.Input(id="nw-pension", type="number",
+                          value=saved.get("pension", 0),
                           style={"width": "100%", "padding": "6px"}),
             ], style={"width": "18%", "display": "inline-block", "padding": "10px 15px"}),
             html.Div([
                 html.Label("Other Assets"),
-                dcc.Input(id="nw-other", type="number", value=0, step=1000,
+                dcc.Input(id="nw-other", type="number",
+                          value=saved.get("other", 0),
                           style={"width": "100%", "padding": "6px"}),
             ], style={"width": "18%", "display": "inline-block", "padding": "10px 15px"}),
             html.Div([
                 html.Label("Liabilities (Debt)"),
-                dcc.Input(id="nw-liabilities", type="number", value=0, step=1000,
+                dcc.Input(id="nw-liabilities", type="number",
+                          value=saved.get("liabilities", 0),
                           style={"width": "100%", "padding": "6px"}),
             ], style={"width": "18%", "display": "inline-block", "padding": "10px 15px"}),
         ], style={"marginBottom": "10px"}),
@@ -71,6 +72,15 @@ def register_callbacks(app):
         other = other or 0
         liabilities = liabilities or 0
 
+        # Persist values
+        user_settings.save({"networth": {
+            "real_estate": real_estate,
+            "cash": cash,
+            "pension": pension,
+            "other": other,
+            "liabilities": liabilities,
+        }})
+
         portfolio_value = dlp.portfolio_total_value()
         total_assets = portfolio_value + real_estate + cash + pension + other
         net_worth = total_assets - liabilities
@@ -87,7 +97,6 @@ def register_callbacks(app):
         asset_labels = []
         asset_values = []
 
-        # Break portfolio into sub-categories
         df = dlp.fetch_data()
         if not df.empty:
             type_alloc = df.groupby("asset_type")["total_value"].sum()
@@ -149,18 +158,20 @@ def register_callbacks(app):
             }
         }
 
-        # Cumulative investment from transactions
+        # Cumulative investment from Buy transactions (actual securities purchased)
         txn_df = dlt.ingest_transactions()
         inv_chart_div = html.Div()
         if not txn_df.empty and "date" in txn_df.columns and "net_amount" in txn_df.columns:
-            payments = txn_df[txn_df["transaction"].str.lower() == "payment"].copy()
-            if not payments.empty:
-                payments = payments.sort_values("date")
-                payments["cumulative"] = payments["net_amount"].cumsum()
+            buys = txn_df[txn_df["transaction"].str.lower().isin(
+                ["buy", "crypto deposit"]
+            )].copy()
+            if not buys.empty:
+                buys = buys.sort_values("date")
+                buys["cumulative"] = buys["net_amount"].abs().cumsum()
                 inv_chart = {
                     'data': [{
-                        'x': payments["date"].dt.strftime("%Y-%m-%d").tolist(),
-                        'y': payments["cumulative"].tolist(),
+                        'x': buys["date"].dt.strftime("%Y-%m-%d").tolist(),
+                        'y': buys["cumulative"].tolist(),
                         'type': 'scatter',
                         'mode': 'lines',
                         'fill': 'tozeroy',

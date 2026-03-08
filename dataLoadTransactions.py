@@ -158,19 +158,24 @@ def yearly_transaction_sum(year, transaction_type) -> float:
 
 
 def monthly_totals(transaction_type):
+    """Return (months, vals_2y_ago, vals_prev, vals_current)."""
+    months_2y, values_2y = monthly_transaction_summary(currentYear - 2, transaction_type)
     months_prev, values_prev = monthly_transaction_summary(currentYear - 1, transaction_type)
     months_current, values_current = monthly_transaction_summary(currentYear, transaction_type)
 
+    dict_2y = dict(zip(months_2y, values_2y))
     dict_prev = dict(zip(months_prev, values_prev))
     dict_current = dict(zip(months_current, values_current))
 
+    vals_2y = [dict_2y.get(m, 0) for m in months]
     vals_prev = [dict_prev.get(m, 0) for m in months]
     vals_current = [dict_current.get(m, 0) for m in months]
 
-    return months, vals_prev, vals_current
+    return months, vals_2y, vals_prev, vals_current
 
 
 def totals(transaction_type):
-    current_year_total = yearly_transaction_sum(currentYear, transaction_type)
+    two_years_ago_total = yearly_transaction_sum(currentYear - 2, transaction_type)
     prev_year_total = yearly_transaction_sum(currentYear - 1, transaction_type)
-    return [prev_year_total, current_year_total]
+    current_year_total = yearly_transaction_sum(currentYear, transaction_type)
+    return [two_years_ago_total, prev_year_total, current_year_total]

@@ -114,20 +114,24 @@ def _build_dividend_analysis():
 
 
 def render_page_content():
+    y2 = dlt.currentYear - 2
+    y1 = dlt.currentYear - 1
+    y0 = dlt.currentYear
+
     return html.Div([
         html.Hr(),
         html.Div([
             Styles.kpiboxes(f'Total Dividends:',
-                            dlt.total_transaction_amount(dlt.currentYear, "Dividend"),
+                            dlt.total_transaction_amount(y0, "Dividend"),
                             Styles.colorPalette[0]),
             Styles.kpiboxes(f'Total New Investments:',
-                            dlt.total_transaction_amount(dlt.currentYear, "Payment"),
+                            dlt.total_transaction_amount(y0, "Payment"),
                             Styles.colorPalette[1]),
             Styles.kpiboxes(f'Total Sec. Lending:',
-                            dlt.total_transaction_amount(dlt.currentYear, "Securities Lending"),
+                            dlt.total_transaction_amount(y0, "Securities Lending"),
                             Styles.colorPalette[2]),
             Styles.kpiboxes(f'Total Fees:',
-                            dlt.total_transaction_amount(dlt.currentYear, "Custody Fees"),
+                            dlt.total_transaction_amount(y0, "Custody Fees"),
                             Styles.colorPalette[3]),
         ]),
         html.Hr(),
@@ -156,8 +160,9 @@ def render_page_content():
             )
         ], style=Styles.STYLE(100)),
         html.Hr(),
+        # --- Monthly Dividends: 3-year comparison ---
         html.Div([
-            html.H4(f"Monthly Dividends: {dlt.currentYear - 1} vs {dlt.currentYear}"),
+            html.H4(f"Monthly Dividends: {y2} vs {y1} vs {y0}"),
             dcc.Graph(
                 id='monthly-dividends-bar',
                 figure={
@@ -166,14 +171,21 @@ def render_page_content():
                             'x': dlt.months,
                             'y': dlt.monthly_totals("Dividend")[1],
                             'type': 'bar',
-                            'name': str(dlt.currentYear - 1),
-                            'marker': {'color': Styles.colorPalette[1]}
+                            'name': str(y2),
+                            'marker': {'color': Styles.colorPalette[2]}
                         },
                         {
                             'x': dlt.months,
                             'y': dlt.monthly_totals("Dividend")[2],
                             'type': 'bar',
-                            'name': str(dlt.currentYear),
+                            'name': str(y1),
+                            'marker': {'color': Styles.colorPalette[1]}
+                        },
+                        {
+                            'x': dlt.months,
+                            'y': dlt.monthly_totals("Dividend")[3],
+                            'type': 'bar',
+                            'name': str(y0),
                             'marker': {'color': Styles.colorPalette[0]}
                         },
                     ],
@@ -195,10 +207,12 @@ def render_page_content():
                 figure={
                     'data': [
                         {
-                            'x': [str(dlt.currentYear - 1), str(dlt.currentYear)],
+                            'x': [str(y2), str(y1), str(y0)],
                             'y': dlt.totals("Dividend"),
                             'type': 'bar',
-                            'marker': {'color': [Styles.colorPalette[1], Styles.colorPalette[0]]},
+                            'marker': {'color': [Styles.colorPalette[2],
+                                                 Styles.colorPalette[1],
+                                                 Styles.colorPalette[0]]},
                             'name': 'Yearly Dividend'
                         }
                     ],
@@ -212,8 +226,9 @@ def render_page_content():
         ], style=Styles.STYLE(18)),
         # --------------------------------------------------------------------------------------------------------------
         html.Hr(),
+        # --- Monthly Investments: 3-year comparison ---
         html.Div([
-            html.H4(f"Monthly Investments: {dlt.currentYear - 1} vs {dlt.currentYear}"),
+            html.H4(f"Monthly Investments: {y2} vs {y1} vs {y0}"),
             dcc.Graph(
                 id='monthly-investment-comparison-bar',
                 figure={
@@ -222,14 +237,21 @@ def render_page_content():
                             'x': dlt.months,
                             'y': dlt.monthly_totals("Payment")[1],
                             'type': 'bar',
-                            'name': str(dlt.currentYear - 1),
-                            'marker': {'color': Styles.colorPalette[1]}
+                            'name': str(y2),
+                            'marker': {'color': Styles.colorPalette[2]}
                         },
                         {
                             'x': dlt.months,
                             'y': dlt.monthly_totals("Payment")[2],
                             'type': 'bar',
-                            'name': str(dlt.currentYear),
+                            'name': str(y1),
+                            'marker': {'color': Styles.colorPalette[1]}
+                        },
+                        {
+                            'x': dlt.months,
+                            'y': dlt.monthly_totals("Payment")[3],
+                            'type': 'bar',
+                            'name': str(y0),
                             'marker': {'color': Styles.colorPalette[0]}
                         },
                     ],
@@ -251,10 +273,12 @@ def render_page_content():
                 figure={
                     'data': [
                         {
-                            'x': [str(dlt.currentYear - 1), str(dlt.currentYear)],
+                            'x': [str(y2), str(y1), str(y0)],
                             'y': dlt.totals("Payment"),
                             'type': 'bar',
-                            'marker': {'color': [Styles.colorPalette[1], Styles.colorPalette[0]]},
+                            'marker': {'color': [Styles.colorPalette[2],
+                                                 Styles.colorPalette[1],
+                                                 Styles.colorPalette[0]]},
                             'name': 'Yearly Investments'
                         }
                     ],
