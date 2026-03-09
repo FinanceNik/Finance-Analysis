@@ -63,7 +63,7 @@ CONTENT_STYLE_DARK = {**CONTENT_STYLE}
 
 # ── Card wrapper ──
 def STYLE(width):
-    """Return inline style for a card-like container."""
+    """Deprecated: use CSS grid classes (.grid-2, .grid-3) instead."""
     return {
         'width': f'{width}%',
         'display': 'inline-block',
@@ -73,6 +73,7 @@ def STYLE(width):
 
 
 def FILLER():
+    """Deprecated: remove FILLER() calls, use CSS grid instead."""
     return {
         'width': '2%',
         'display': 'inline-block',
@@ -81,11 +82,79 @@ def FILLER():
 
 
 # ── KPI boxes (clean HTML, no DataTable hack) ──
+# ── Skeleton loading placeholders ──
+def skeleton_kpis(count=4):
+    """Shimmer skeleton row matching KPI box layout."""
+    return html.Div([
+        html.Div(
+            html.Div(className="skeleton-line skeleton-kpi"),
+            className="kpi-box",
+        ) for _ in range(count)
+    ], className="kpi-row")
+
+
+def skeleton_chart(height="300px"):
+    """Shimmer skeleton matching a chart card."""
+    return html.Div(
+        html.Div(className="skeleton-line skeleton-chart",
+                 style={"height": height}),
+        className="card", style={"padding": "16px"},
+    )
+
+
+def skeleton_table(rows=5):
+    """Shimmer skeleton matching a data table."""
+    return html.Div([
+        html.Div(className="skeleton-line",
+                 style={"height": "20px", "width": "100%", "marginBottom": "12px"}),
+    ] + [
+        html.Div(className="skeleton-line skeleton-table-row",
+                 style={"width": f"{85 + (i % 3) * 5}%"})
+        for i in range(rows)
+    ], className="card", style={"padding": "16px"})
+
+
 def kpiboxes(label_text, value, color):
     return html.Div(
         html.Div([
             html.Div(label_text, className="kpi-label"),
             html.Div(str(value), className="kpi-value"),
+        ], className="kpi-inner", style={"backgroundColor": color}),
+        className="kpi-box",
+    )
+
+
+def kpiboxes_spark(label_text, value, color, data_points=None):
+    """KPI box with an optional SVG sparkline.
+    data_points: list of numeric values to render as a mini line chart.
+    """
+    spark = html.Div()
+    if data_points and len(data_points) >= 2:
+        # Normalize to SVG coordinates (80 wide, 24 tall)
+        vals = [float(v) for v in data_points if v is not None]
+        if vals:
+            mn, mx = min(vals), max(vals)
+            rng = mx - mn if mx != mn else 1
+            w, h = 80, 24
+            pts = []
+            for i, v in enumerate(vals):
+                x = round(i / (len(vals) - 1) * w, 1)
+                y = round(h - (v - mn) / rng * h, 1)
+                pts.append(f"{x},{y}")
+            polyline = f'<polyline points="{" ".join(pts)}" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="1.5" />'
+            svg = f'<svg viewBox="0 0 {w} {h}" style="width:80px;height:24px;margin-top:4px;">{polyline}</svg>'
+            from dash import dcc
+            spark = dcc.Markdown(
+                f'<div style="margin-top:4px">{svg}</div>',
+                dangerously_allow_html=True,
+                style={"margin": 0, "padding": 0, "lineHeight": 0},
+            )
+
+    return html.Div(
+        html.Div([
+            html.Div(label_text, className="kpi-label"),
+            html.Div(str(value), className="kpi-value"),
+            spark,
         ], className="kpi-inner", style={"backgroundColor": color}),
         className="kpi-box",
     )

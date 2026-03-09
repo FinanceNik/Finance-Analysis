@@ -1,4 +1,5 @@
 import os
+import re
 import logging
 import glob
 import pandas as pd
@@ -21,6 +22,13 @@ def _find_latest_transactions_file() -> str:
 _transactions_filepath = _find_latest_transactions_file()
 
 
+def _extract_account_id(filepath: str) -> str:
+    """Extract account ID from a positions filename like Positions_1640083_..."""
+    basename = os.path.basename(filepath)
+    match = re.search(r"Positions_(\d+)_", basename)
+    return match.group(1) if match else "Unknown"
+
+
 def _find_latest_positions_file() -> str:
     """Find the most recent positions file (CSV or XLS) in the data directory."""
     patterns = ["data/Positions_*.csv", "data/Positions_*.xls", "data/Positions_*.xlsx"]
@@ -31,6 +39,20 @@ def _find_latest_positions_file() -> str:
         return ""
     # Return the most recently modified file
     return max(all_files, key=os.path.getmtime)
+
+
+def get_all_account_ids() -> list:
+    """Get all unique account IDs from position filenames in the data directory."""
+    patterns = ["data/Positions_*.csv", "data/Positions_*.xls", "data/Positions_*.xlsx"]
+    all_files = []
+    for pattern in patterns:
+        all_files.extend(glob.glob(pattern))
+    ids = set()
+    for f in all_files:
+        aid = _extract_account_id(f)
+        if aid != "Unknown":
+            ids.add(aid)
+    return sorted(ids)
 
 
 _positions_filepath = _find_latest_positions_file()
@@ -155,6 +177,9 @@ def fetch_data() -> pd.DataFrame:
     # Normalize ccy → currency for consistency
     if "ccy" in df.columns and "currency" not in df.columns:
         df = df.rename(columns={"ccy": "currency"})
+
+    # Add account_id column from filename
+    df["account_id"] = _extract_account_id(_positions_filepath)
 
     return df
 

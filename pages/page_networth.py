@@ -4,12 +4,10 @@ import dataLoadPositions as dlp
 import dataLoadTransactions as dlt
 import user_settings
 
-
 def layout():
     saved = user_settings.get("networth", {})
 
     return html.Div([
-        html.Hr(),
         html.H4("Net Worth Overview"),
 
         # --- Manual asset entry ---
@@ -47,13 +45,15 @@ def layout():
         ], style={"marginBottom": "10px"}),
 
         # --- KPI row (dynamic) ---
-        html.Div(id="nw-kpi-row"),
-        html.Hr(),
+        dcc.Loading(
+            html.Div(id="nw-kpi-row", children=Styles.skeleton_kpis(5)),
+            type="dot"),
 
         # --- Charts ---
-        html.Div(id="nw-charts"),
+        dcc.Loading(
+            html.Div(id="nw-charts", children=Styles.skeleton_chart()),
+            type="dot"),
     ])
-
 
 def register_callbacks(app):
     @app.callback(
@@ -91,7 +91,7 @@ def register_callbacks(app):
             Styles.kpiboxes("Total Assets", f"{total_assets:,}", Styles.colorPalette[1]),
             Styles.kpiboxes("Liabilities", f"{liabilities:,}", Styles.strongRed),
             Styles.kpiboxes("Net Worth", f"{net_worth:,}", Styles.strongGreen),
-        ])
+        ], className="kpi-row")
 
         # Build asset breakdown for pie chart
         asset_labels = []
@@ -182,17 +182,17 @@ def register_callbacks(app):
                 }
                 inv_chart_div = html.Div([
                     dcc.Graph(id='nw-cumulative-investment', figure=inv_chart)
-                ], className="card", style=Styles.STYLE(100))
+                ], className="card")
 
         charts = html.Div([
             html.Div([
-                dcc.Graph(id='nw-composition-pie', figure=nw_pie)
-            ], className="card", style=Styles.STYLE(48)),
-            html.Div([''], style=Styles.FILLER()),
-            html.Div([
-                dcc.Graph(id='nw-bar-chart', figure=bar_chart)
-            ], className="card", style=Styles.STYLE(48)),
-            html.Hr(),
+                html.Div([
+                    dcc.Graph(id='nw-composition-pie', figure=nw_pie)
+                ], className="card"),
+                html.Div([
+                    dcc.Graph(id='nw-bar-chart', figure=bar_chart)
+                ], className="card"),
+            ], className="grid-2"),
             inv_chart_div,
         ])
 

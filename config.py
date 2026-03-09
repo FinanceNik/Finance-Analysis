@@ -32,6 +32,14 @@ ETF_EXPENSE_RATIOS = {
 BENCHMARK_TICKER = "URTH"       # iShares MSCI World ETF
 BENCHMARK_NAME = "MSCI World"
 
+BENCHMARKS = [
+    {"ticker": "SPY", "name": "S&P 500"},
+    {"ticker": "URTH", "name": "MSCI World"},
+]
+
+BENCHMARK_NAMES = {b["ticker"]: b["name"] for b in BENCHMARKS}
+BENCHMARK_TICKERS = [b["ticker"] for b in BENCHMARKS]
+
 # Default target allocation for rebalancing (geography → %)
 DEFAULT_TARGET_ALLOCATION = {
     "World":  50,
@@ -39,4 +47,28 @@ DEFAULT_TARGET_ALLOCATION = {
     "EU":     15,
     "EM":     10,
     "Crypto":  5,
+}
+
+# Sector mapping for positions (manually maintained)
+SECTOR_MAP = {
+    "APC":    "Technology",
+    "ABEC":   "Technology",
+    "307":    "Technology",
+    "GOOG":   "Technology",
+    "AMZN":   "Technology",
+    "QQQM":   "Technology",
+    "FTK":    "Financials",
+    "AHYQ":   "Diversified",
+    "CBMEM":  "Diversified",
+    "SPICHA": "Diversified",
+    "VGEU":   "Diversified",
+    "VFEM":   "Diversified",
+    "EIMI":   "Diversified",
+    "WOSC":   "Diversified",
+    "XDEM":   "Diversified",
+    "ETH":    "Crypto",
+    "BTC":    "Crypto",
+    "BNT":    "Crypto",
+    "POL":    "Crypto",
+    "LINK":   "Crypto",
 }
