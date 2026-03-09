@@ -3,6 +3,7 @@ import pandas as pd
 import yfinance as yf
 from time import sleep
 import numpy as np
+import config
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +17,7 @@ def fetch_historical_data_yfinance():
 
     combined_df = pd.DataFrame()
 
+    # Fetch portfolio holdings
     for ticker_symbol in tickers:
         try:
             ticker = yf.Ticker(ticker_symbol)
@@ -30,6 +32,25 @@ def fetch_historical_data_yfinance():
             sleep(0)
         except Exception as e:
             logger.warning("Failed to fetch data for %s: %s", ticker_symbol, e)
+
+    # Fetch benchmark tickers (SPY, URTH, etc.)
+    for bench in config.BENCHMARKS:
+        bench_ticker = bench["ticker"]
+        if bench_ticker in combined_df.columns:
+            continue  # already fetched via mapping
+        try:
+            ticker = yf.Ticker(bench_ticker)
+            historical_data = ticker.history(period="5y")
+            close_df = historical_data[["Close"]].rename(columns={"Close": bench_ticker})
+
+            if combined_df.empty:
+                combined_df = close_df
+            else:
+                combined_df = combined_df.join(close_df, how='outer')
+
+            sleep(0)
+        except Exception as e:
+            logger.warning("Failed to fetch benchmark data for %s: %s", bench_ticker, e)
 
     if combined_df.empty:
         logger.warning("No historical data fetched for any ticker.")

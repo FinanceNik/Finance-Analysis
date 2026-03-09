@@ -243,6 +243,11 @@ def _build_performance_chart():
         dates = hist.index.tolist()
         data_cols = list(hist.columns)
 
+    # Separate benchmark columns from portfolio holdings
+    bench_tickers = config.BENCHMARK_TICKERS
+    holding_cols = [c for c in data_cols if c not in bench_tickers]
+    bench_cols = [c for c in bench_tickers if c in data_cols]
+
     # Transform from log scale to actual values
     price_data = hist[data_cols].apply(lambda col: 10 ** col)
 
@@ -250,35 +255,57 @@ def _build_performance_chart():
     first_valid = price_data.apply(lambda s: s.dropna().iloc[0] if not s.dropna().empty else np.nan)
     normalized = (price_data / first_valid) * 100
 
-    # Portfolio average (equal weight)
-    portfolio_avg = normalized.mean(axis=1).dropna()
+    # Portfolio average from holdings only (exclude benchmarks)
+    if holding_cols:
+        portfolio_avg = normalized[holding_cols].mean(axis=1).dropna()
+    else:
+        portfolio_avg = normalized.mean(axis=1).dropna()
 
     traces = [{
         'x': dates,
         'y': portfolio_avg.round(2).tolist(),
         'type': 'scatter',
         'mode': 'lines',
-        'name': 'Portfolio Avg',
+        'name': 'Portfolio',
         'line': {'color': Styles.colorPalette[0], 'width': 3},
     }]
 
-    for i, col in enumerate(data_cols):
+    # Benchmark overlays
+    bench_colors = [Styles.colorPalette[2], Styles.strongGreen]
+    for i, col in enumerate(bench_cols):
         series = normalized[col].dropna()
         if not series.empty:
+            label = config.BENCHMARK_NAMES.get(col, col)
+            x_vals = [dates[j] for j in series.index] if "date" in hist.columns else series.index.tolist()
             traces.append({
-                'x': [dates[j] for j in series.index] if "date" in hist.columns else series.index.tolist(),
+                'x': x_vals,
+                'y': series.round(2).tolist(),
+                'type': 'scatter',
+                'mode': 'lines',
+                'name': label,
+                'line': {'color': bench_colors[i % len(bench_colors)],
+                         'width': 2, 'dash': 'dash'},
+            })
+
+    # Individual holdings as faint lines
+    for col in holding_cols:
+        series = normalized[col].dropna()
+        if not series.empty:
+            x_vals = [dates[j] for j in series.index] if "date" in hist.columns else series.index.tolist()
+            traces.append({
+                'x': x_vals,
                 'y': series.round(2).tolist(),
                 'type': 'scatter',
                 'mode': 'lines',
                 'name': col,
                 'line': {'width': 1},
-                'opacity': 0.5,
+                'opacity': 0.35,
             })
 
     return {
         'data': traces,
         'layout': Styles.graph_layout(
-            title='Performance Overview (Normalized to 100)',
+            title='Portfolio vs Benchmarks (Normalized to 100)',
             xaxis={'title': 'Date', 'type': 'date' if 'date' in hist.columns else 'linear'},
             yaxis={'title': 'Indexed Value'},
             hovermode='x unified',

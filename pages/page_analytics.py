@@ -232,7 +232,7 @@ def _build_currency_impact(df):
 
 
 def _build_benchmark_section():
-    """Build benchmark comparison chart."""
+    """Build benchmark comparison chart with SPY/MSCI World overlays."""
     try:
         hist = pd.read_csv("data/historical_data.csv")
         if "date" in hist.columns:
@@ -244,24 +244,49 @@ def _build_benchmark_section():
     if hist.empty or hist.shape[1] < 2:
         return html.Div()
 
+    # Separate benchmark columns from portfolio holdings
+    bench_tickers = config.BENCHMARK_TICKERS
+    holding_cols = [c for c in hist.columns if c not in bench_tickers]
+    bench_cols = [c for c in bench_tickers if c in hist.columns]
+
     # Normalize all to 100 at start
     first_valid = hist.apply(lambda s: s.dropna().iloc[0] if not s.dropna().empty else np.nan)
     normalized = (hist / first_valid) * 100
 
-    # Portfolio average (equal weight across all tickers)
-    portfolio_avg = normalized.mean(axis=1).dropna()
+    # Portfolio average from HOLDINGS ONLY (exclude benchmarks)
+    if holding_cols:
+        portfolio_avg = normalized[holding_cols].mean(axis=1).dropna()
+    else:
+        portfolio_avg = normalized.mean(axis=1).dropna()
 
+    # ── Traces ──
     traces = [{
         'x': portfolio_avg.index.tolist(),
         'y': portfolio_avg.round(2).tolist(),
         'type': 'scatter',
         'mode': 'lines',
-        'name': 'Portfolio (Equal Weight)',
+        'name': 'Portfolio',
         'line': {'color': Styles.colorPalette[0], 'width': 3},
     }]
 
-    # Add individual tickers in lighter colors
-    for col in normalized.columns:
+    # Benchmark overlays (bold dashed lines)
+    bench_colors = [Styles.colorPalette[2], Styles.strongGreen]
+    for i, col in enumerate(bench_cols):
+        series = normalized[col].dropna()
+        if not series.empty:
+            label = config.BENCHMARK_NAMES.get(col, col)
+            traces.append({
+                'x': series.index.tolist(),
+                'y': series.round(2).tolist(),
+                'type': 'scatter',
+                'mode': 'lines',
+                'name': label,
+                'line': {'color': bench_colors[i % len(bench_colors)],
+                         'width': 2, 'dash': 'dash'},
+            })
+
+    # Individual holdings as faint lines
+    for col in holding_cols:
         series = normalized[col].dropna()
         if not series.empty:
             traces.append({
@@ -271,21 +296,46 @@ def _build_benchmark_section():
                 'mode': 'lines',
                 'name': col,
                 'line': {'width': 1},
-                'opacity': 0.5,
+                'opacity': 0.35,
             })
 
     chart = {
         'data': traces,
         'layout': Styles.graph_layout(
-            title='Normalized Performance (Base = 100)',
+            title='Portfolio vs Benchmarks (Normalized to 100)',
             xaxis={'title': 'Date', 'type': 'date'},
             yaxis={'title': 'Indexed Value'},
             hovermode='x unified',
+            legend={'orientation': 'h', 'y': -0.12, 'x': 0.5, 'xanchor': 'center'},
+            margin={'b': 60},
         ),
     }
 
+    # ── Alpha KPIs ──
+    alpha_kpis = []
+    portfolio_final = portfolio_avg.iloc[-1] if not portfolio_avg.empty else 100
+    portfolio_return = portfolio_final - 100
+
+    for col in bench_cols:
+        series = normalized[col].dropna()
+        if not series.empty:
+            bench_final = series.iloc[-1]
+            bench_return = bench_final - 100
+            alpha = portfolio_return - bench_return
+            label = config.BENCHMARK_NAMES.get(col, col)
+            color = Styles.strongGreen if alpha >= 0 else Styles.strongRed
+            alpha_kpis.append(
+                Styles.kpiboxes(f"Alpha vs {label}", f"{alpha:+.1f}%", color)
+            )
+
+    alpha_kpis.insert(0, Styles.kpiboxes(
+        "Portfolio Return", f"{portfolio_return:+.1f}%",
+        Styles.strongGreen if portfolio_return >= 0 else Styles.strongRed))
+
     return html.Div([
-        dcc.Graph(id='benchmark-chart', figure=chart)
+        html.Div(alpha_kpis),
+        html.Hr(),
+        dcc.Graph(id='benchmark-chart', figure=chart),
     ], className="card", style=Styles.STYLE(100))
 
 

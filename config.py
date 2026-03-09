@@ -32,6 +32,14 @@ ETF_EXPENSE_RATIOS = {
 BENCHMARK_TICKER = "URTH"       # iShares MSCI World ETF
 BENCHMARK_NAME = "MSCI World"
 
+BENCHMARKS = [
+    {"ticker": "SPY", "name": "S&P 500"},
+    {"ticker": "URTH", "name": "MSCI World"},
+]
+
+BENCHMARK_NAMES = {b["ticker"]: b["name"] for b in BENCHMARKS}
+BENCHMARK_TICKERS = [b["ticker"] for b in BENCHMARKS]
+
 # Default target allocation for rebalancing (geography → %)
 DEFAULT_TARGET_ALLOCATION = {
     "World":  50,
