@@ -1,10 +1,8 @@
 from dash import html
 
-
 def render_page_content():
     return html.Div([
         html.Div([html.H1('About This Finance Dashboard')], style={"textAlign": "left"}),
-        html.Hr(),
         html.H2('Your Personal Wealth Analysis Tool'),
         html.P(
             'This application provides a comprehensive view of your personal wealth, '
@@ -12,7 +10,6 @@ def render_page_content():
             'Track positions, analyze dividends, run Monte Carlo simulations, model real estate, '
             'plan rebalancing, and track your financial goals — all in one place.'
         ),
-        html.Hr(),
         html.H2('Pages'),
         html.Ul([
             html.Li('Net Worth: Aggregate view of all assets (portfolio, real estate, cash, pension) '
@@ -34,12 +31,10 @@ def render_page_content():
             html.Li('Goals: Set and track financial goals with progress bars, '
                      'monthly contribution projections, and estimated completion dates.'),
         ]),
-        html.Hr(),
         html.H2('Getting Started'),
         html.Ol([
             html.Li('Export your positions and transactions as CSV files from your broker.'),
             html.Li('Place them in the data/ directory or upload via the Positions page.'),
             html.Li('Explore your portfolio insights across the dashboard pages.'),
         ]),
-        html.Hr(),
-    ], style={"width": "50%", "textAlign": "left"})
+    ], style={"textAlign": "left", "maxWidth": "800px"})

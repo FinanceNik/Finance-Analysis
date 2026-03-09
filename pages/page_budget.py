@@ -4,13 +4,11 @@ import Styles
 import dataLoadPositions as dlp
 import user_settings
 
-
 def _hex_to_rgba(hex_color, alpha):
     """Convert hex color to rgba string."""
     h = hex_color.lstrip('#')
     r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
     return f"rgba({r},{g},{b},{alpha})"
-
 
 def _calc_years_to_fire(portfolio, annual_savings, fire_number, growth_rate=0.07):
     """Calculate years to reach FIRE number with contributions and compound growth."""
@@ -26,7 +24,6 @@ def _calc_years_to_fire(portfolio, annual_savings, fire_number, growth_rate=0.07
         if current >= fire_number:
             return year
     return float('inf')
-
 
 def layout():
     saved = user_settings.get("budget", {})
@@ -62,7 +59,6 @@ def layout():
         ]
 
     return html.Div([
-        html.Hr(),
         html.H4("Budget & Cash Flow"),
 
         html.Div([
@@ -75,12 +71,13 @@ def layout():
             html.Div(_input_row(expense_fields, "18%")),
         ], style={"marginBottom": "10px"}),
 
-        html.Hr(),
-        html.Div(id="budget-kpis"),
-        html.Hr(),
-        html.Div(id="budget-charts"),
+        dcc.Loading(
+            html.Div(id="budget-kpis", children=Styles.skeleton_kpis(4)),
+            type="dot"),
+        dcc.Loading(
+            html.Div(id="budget-charts", children=Styles.skeleton_chart()),
+            type="dot"),
     ])
-
 
 def register_callbacks(app):
     income_ids = ["budget-salary", "budget-side", "budget-dividends", "budget-other-inc"]
@@ -143,7 +140,7 @@ def register_callbacks(app):
             Styles.kpiboxes("Monthly Savings", f"{monthly_savings:,.0f}",
                             Styles.strongGreen if monthly_savings >= 0 else Styles.strongRed),
             Styles.kpiboxes("Savings Rate", f"{savings_rate:.1f}%", Styles.colorPalette[2]),
-        ])
+        ], className="kpi-row")
 
         # --- Sankey chart ---
         sankey = _build_sankey(incomes, expenses, monthly_savings)
@@ -195,7 +192,7 @@ def register_callbacks(app):
             Styles.kpiboxes("Years to FIRE",
                             f"{years_to_fire:.1f}" if years_to_fire < 200 else "N/A",
                             Styles.colorPalette[3]),
-        ])
+        ], className="kpi-row")
 
         progress_pct = min(fire_progress, 100)
         fire_bar = html.Div([
@@ -213,26 +210,24 @@ def register_callbacks(app):
         charts = html.Div([
             html.Div([
                 dcc.Graph(id='budget-sankey', figure=sankey)
-            ], className="card", style=Styles.STYLE(100)),
-            html.Hr(),
+            ], className="card"),
             html.Div([
-                dcc.Graph(id='budget-pie', figure=pie_chart)
-            ], className="card", style=Styles.STYLE(48)),
-            html.Div([''], style=Styles.FILLER()),
-            html.Div([
-                dcc.Graph(id='budget-passive', figure=passive_chart)
-            ], className="card", style=Styles.STYLE(48)),
-            html.Hr(),
+                html.Div([
+                    dcc.Graph(id='budget-pie', figure=pie_chart)
+                ], className="card"),
+                html.Div([
+                    dcc.Graph(id='budget-passive', figure=passive_chart)
+                ], className="card"),
+            ], className="grid-2"),
             html.H4("Financial Independence"),
             fire_kpis,
             fire_bar,
             html.Div([
                 dcc.Graph(id='budget-fire-projection', figure=projection)
-            ], className="card", style=Styles.STYLE(100)),
+            ], className="card"),
         ])
 
         return kpis, charts
-
 
 def _build_sankey(incomes, expenses, savings):
     """Build a Sankey diagram showing cash flow from income to expenses and savings."""
@@ -317,7 +312,6 @@ def _build_sankey(incomes, expenses, savings):
             height=450,
         )
     }
-
 
 def _build_fire_projection(portfolio, annual_savings, fire_number, growth_rate=0.07):
     """Build a projection chart showing portfolio growth toward FIRE number."""

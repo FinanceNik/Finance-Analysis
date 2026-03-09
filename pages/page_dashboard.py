@@ -7,7 +7,6 @@ import dataLoadPositions as dlp
 import dataLoadTransactions as dlt
 import user_settings
 
-
 def _fmt_currency(value):
     """Format a numeric value as a readable currency string."""
     if value is None:
@@ -16,13 +15,11 @@ def _fmt_currency(value):
         return f"{value / 1_000_000:,.1f}M"
     return f"{value:,.0f}"
 
-
 def _safe_div(numerator, denominator, default=0):
     """Safe division that returns default on zero/None denominator."""
     if not denominator:
         return default
     return numerator / denominator
-
 
 def _build_allocation_donut():
     """Build a small donut chart of portfolio allocation by asset type."""
@@ -55,7 +52,6 @@ def _build_allocation_donut():
             margin={'t': 40, 'b': 20, 'l': 20, 'r': 20},
         ),
     }
-
 
 def _build_dividend_sparkline():
     """Build a sparkline-style bar chart showing last 12 months of dividends."""
@@ -108,7 +104,6 @@ def _build_dividend_sparkline():
         ),
     }
 
-
 def _build_top_movers():
     """Build a horizontal bar chart showing top 5 gainers and losers by unrealized PnL."""
     df = dlp.add_position_pnl_columns()
@@ -157,7 +152,6 @@ def _build_top_movers():
         ),
     }
 
-
 def _build_fire_progress():
     """Build FIRE progress metric with a visual progress bar."""
     saved = user_settings.get("budget", {}) or {}
@@ -181,7 +175,7 @@ def _build_fire_progress():
                 "color": bar_color,
             }),
             html.Span(" of FIRE number", style={
-                "fontSize": "14px", "color": "#888", "marginLeft": "8px",
+                "fontSize": "14px", "color": "var(--text-muted, #888)", "marginLeft": "8px",
             }),
         ]),
         html.Div([
@@ -199,11 +193,11 @@ def _build_fire_progress():
         }),
         html.Div([
             html.Div([
-                html.Span("Portfolio: ", style={"color": "#888", "fontSize": "13px"}),
+                html.Span("Portfolio: ", style={"color": "var(--text-muted, #888)", "fontSize": "13px"}),
                 html.Span(f"{_fmt_currency(portfolio)}", style={"fontWeight": "bold", "fontSize": "13px"}),
             ], style={"marginTop": "10px"}),
             html.Div([
-                html.Span("FIRE Number: ", style={"color": "#888", "fontSize": "13px"}),
+                html.Span("FIRE Number: ", style={"color": "var(--text-muted, #888)", "fontSize": "13px"}),
                 html.Span(
                     f"{_fmt_currency(fire_number)}" if fire_number > 0 else "Set expenses in Budget",
                     style={"fontWeight": "bold", "fontSize": "13px"},
@@ -211,7 +205,6 @@ def _build_fire_progress():
             ]),
         ]),
     ], style={"padding": "10px"})
-
 
 def _build_performance_chart():
     """Build a normalized performance chart from historical_data.csv."""
@@ -314,7 +307,6 @@ def _build_performance_chart():
         ),
     }
 
-
 def _get_portfolio_sparkline():
     """Get last 12 data points from historical data for a portfolio sparkline."""
     try:
@@ -329,7 +321,6 @@ def _get_portfolio_sparkline():
     except Exception:
         return None
 
-
 def _get_dividend_sparkline():
     """Get monthly dividend totals for sparkline."""
     try:
@@ -337,7 +328,6 @@ def _get_dividend_sparkline():
         return vals if len(vals) >= 2 else None
     except Exception:
         return None
-
 
 def layout():
     # ── Gather summary data ──
@@ -372,7 +362,6 @@ def layout():
     dividend_spark = _get_dividend_sparkline()
 
     return html.Div([
-        html.Hr(),
 
         # ── Row 1: Hero KPIs ──
         html.Div([
@@ -380,40 +369,39 @@ def layout():
             Styles.kpiboxes_spark("Portfolio Value", _fmt_currency(portfolio_value), Styles.colorPalette[1], portfolio_spark),
             Styles.kpiboxes_spark("YTD Return", f"{return_pct:.1%}", return_color),
             Styles.kpiboxes_spark("Monthly Savings", _fmt_currency(monthly_savings), savings_color, dividend_spark),
-        ]),
-        html.Hr(),
+        ], className="kpi-row"),
 
         # ── Row 2: Allocation donut + Dividend sparkline ──
         html.Div([
-            dcc.Graph(
-                id='dash-allocation-donut',
-                figure=_build_allocation_donut(),
-                config={'displayModeBar': False},
-            ),
-        ], className="card", style=Styles.STYLE(48)),
-        html.Div([''], style=Styles.FILLER()),
-        html.Div([
-            dcc.Graph(
-                id='dash-dividend-sparkline',
-                figure=_build_dividend_sparkline(),
-                config={'displayModeBar': False},
-            ),
-        ], className="card", style=Styles.STYLE(48)),
-        html.Hr(),
+            html.Div([
+                dcc.Graph(
+                    id='dash-allocation-donut',
+                    figure=_build_allocation_donut(),
+                    config={'displayModeBar': False},
+                ),
+            ], className="card"),
+            html.Div([
+                dcc.Graph(
+                    id='dash-dividend-sparkline',
+                    figure=_build_dividend_sparkline(),
+                    config={'displayModeBar': False},
+                ),
+            ], className="card"),
+        ], className="grid-2"),
 
         # ── Row 3: Top Movers + FIRE Progress ──
         html.Div([
-            dcc.Graph(
-                id='dash-top-movers',
-                figure=_build_top_movers(),
-                config={'displayModeBar': False},
-            ),
-        ], className="card", style=Styles.STYLE(48)),
-        html.Div([''], style=Styles.FILLER()),
-        html.Div([
-            _build_fire_progress(),
-        ], className="card", style=Styles.STYLE(48)),
-        html.Hr(),
+            html.Div([
+                dcc.Graph(
+                    id='dash-top-movers',
+                    figure=_build_top_movers(),
+                    config={'displayModeBar': False},
+                ),
+            ], className="card"),
+            html.Div([
+                _build_fire_progress(),
+            ], className="card"),
+        ], className="grid-2"),
 
         # ── Row 4: Performance Overview (full width) ──
         html.Div([
@@ -421,5 +409,5 @@ def layout():
                 id='dash-performance-chart',
                 figure=_build_performance_chart(),
             ),
-        ], className="card", style=Styles.STYLE(100)),
+        ], className="card"),
     ])

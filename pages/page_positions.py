@@ -5,7 +5,6 @@ import dataLoadPositions as dlp
 from dash import dcc, html, Input, Output, State, dash_table
 import pandas as pd
 
-
 def _build_holdings_table(df):
     """Build an interactive DataTable of all holdings."""
     if df.empty:
@@ -32,16 +31,18 @@ def _build_holdings_table(df):
         sort_action="native",
         filter_action="native",
         page_size=20,
-        style_table={"overflowX": "auto"},
+        fixed_rows={"headers": True},
+        export_format="csv",
+        export_headers="display",
+        style_table={"overflowX": "auto", "overflowY": "auto", "maxHeight": "600px"},
         style_cell={"padding": "8px", "textAlign": "left", "fontSize": "14px"},
         style_header={"backgroundColor": Styles.colorPalette[0], "color": "white",
                        "fontWeight": "bold", "fontSize": "14px",
                        "fontFamily": Styles.GRAPH_LAYOUT['font']['family']},
         style_data_conditional=[
-            {"if": {"row_index": "odd"}, "backgroundColor": "#f9f9f9"},
+            {"if": {"row_index": "odd"}, "backgroundColor": "var(--table-stripe, #f9f9f9)"},
         ],
     )
-
 
 def layout():
     account_ids = dlp.get_all_account_ids()
@@ -50,7 +51,6 @@ def layout():
     ]
 
     return html.Div([
-        html.Hr(),
 
         # --- Account filter + File upload row ---
         html.Div([
@@ -82,19 +82,21 @@ def layout():
             ], style={"display": "inline-block", "width": "60%", "verticalAlign": "top", "padding": "10px 15px"}),
         ]),
 
-        html.Hr(),
-
         # --- Dynamic content filtered by account ---
-        html.Div(id="positions-content"),
-
-        html.Hr(),
+        dcc.Loading(
+            html.Div(id="positions-content", children=html.Div([
+                Styles.skeleton_kpis(4), Styles.skeleton_table(),
+            ])),
+            type="dot"),
 
         # --- Historical price chart ---
         html.Div([
-            dcc.Graph(id='historical-prices-chart')
-        ], className="card", style=Styles.STYLE(100))
+            dcc.Loading(
+                dcc.Graph(id='historical-prices-chart'),
+                type="dot",
+            )
+        ], className="card")
     ])
-
 
 def register_callbacks(app):
     @app.callback(
@@ -136,67 +138,65 @@ def register_callbacks(app):
                 Styles.kpiboxes('Total Pur.-Cost', f"{int(cost):,}", Styles.colorPalette[1]),
                 Styles.kpiboxes('Total Unr. Gains', f"{int(pnl):,}", Styles.colorPalette[2]),
                 Styles.kpiboxes('Total % Return', f"{ret_pct:.1%}", Styles.colorPalette[3]),
-            ]),
-            html.Hr(),
+            ], className="kpi-row"),
 
             # Holdings table
             html.H4("Holdings"),
             html.Div([
                 _build_holdings_table(df),
-            ], className="card", style={**Styles.STYLE(100), "marginBottom": "20px"}),
-            html.Hr(),
+            ], className="card", style={"marginBottom": "20px"}),
 
             # Charts row
             html.Div([
-                dcc.Graph(
-                    figure={
-                        'data': [{
-                            'type': 'pie',
-                            'labels': at_alloc['asset_type'].tolist(),
-                            'values': at_alloc['weight'].tolist(),
-                            'textinfo': 'label+percent',
-                            'hoverinfo': 'label+value+percent',
-                            'hole': 0.35,
-                            'marker': {'colors': Styles.colorPalette},
-                        }],
-                        'layout': Styles.graph_layout(title='Asset Type Allocation')
-                    }
-                )
-            ], className="card", style=Styles.STYLE(30)),
-            html.Div([''], style=Styles.FILLER()),
-            html.Div([
-                dcc.Graph(
-                    figure={
-                        'data': [{
-                            'type': 'pie',
-                            'labels': geo_alloc['geography'].tolist() if not geo_alloc.empty else [],
-                            'values': geo_alloc['weight'].tolist() if not geo_alloc.empty else [],
-                            'textinfo': 'label+percent',
-                            'hoverinfo': 'label+value+percent',
-                            'hole': 0.35,
-                            'marker': {'colors': Styles.colorPalette},
-                        }],
-                        'layout': Styles.graph_layout(title='Geography Allocation')
-                    }
-                )
-            ], className="card", style=Styles.STYLE(30)),
-            html.Div([''], style=Styles.FILLER()),
-            html.Div([
-                dcc.Graph(
-                    figure={
-                        'data': [{
-                            'type': 'pie',
-                            'labels': ccy_alloc['currency'].tolist() if not ccy_alloc.empty else [],
-                            'values': ccy_alloc['weight'].tolist() if not ccy_alloc.empty else [],
-                            'textinfo': 'label+percent',
-                            'hoverinfo': 'label+value+percent',
-                            'hole': 0.35,
-                            'marker': {'colors': Styles.colorPalette},
-                        }],
-                        'layout': Styles.graph_layout(title='Currency Exposure')
-                    }
-                )
-            ], className="card", style=Styles.STYLE(30)),
+                html.Div([
+                    dcc.Graph(
+                        figure={
+                            'data': [{
+                                'type': 'pie',
+                                'labels': at_alloc['asset_type'].tolist(),
+                                'values': at_alloc['weight'].tolist(),
+                                'textinfo': 'label+percent',
+                                'hoverinfo': 'label+value+percent',
+                                'hole': 0.35,
+                                'marker': {'colors': Styles.colorPalette},
+                            }],
+                            'layout': Styles.graph_layout(title='Asset Type Allocation')
+                        }
+                    )
+                ], className="card"),
+                html.Div([
+                    dcc.Graph(
+                        figure={
+                            'data': [{
+                                'type': 'pie',
+                                'labels': geo_alloc['geography'].tolist() if not geo_alloc.empty else [],
+                                'values': geo_alloc['weight'].tolist() if not geo_alloc.empty else [],
+                                'textinfo': 'label+percent',
+                                'hoverinfo': 'label+value+percent',
+                                'hole': 0.35,
+                                'marker': {'colors': Styles.colorPalette},
+                            }],
+                            'layout': Styles.graph_layout(title='Geography Allocation')
+                        }
+                    )
+                ], className="card"),
+                html.Div([
+                    dcc.Graph(
+                        figure={
+                            'data': [{
+                                'type': 'pie',
+                                'labels': ccy_alloc['currency'].tolist() if not ccy_alloc.empty else [],
+                                'values': ccy_alloc['weight'].tolist() if not ccy_alloc.empty else [],
+                                'textinfo': 'label+percent',
+                                'hoverinfo': 'label+value+percent',
+                                'hole': 0.35,
+                                'marker': {'colors': Styles.colorPalette},
+                            }],
+                            'layout': Styles.graph_layout(title='Currency Exposure')
+                        }
+                    )
+                ], className="card"),
+            ], className="grid-3"),
         ])
 
     @app.callback(

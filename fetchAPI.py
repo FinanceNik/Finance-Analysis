@@ -11,6 +11,8 @@ logger = logging.getLogger(__name__)
 def fetch_historical_data_yfinance():
     try:
         tickers = pd.read_csv("data/mapping.csv", sep=",")["ticker"].unique().tolist()
+        # Filter out NaN/empty ticker values (crypto, some Amundi ETFs have no yfinance ticker)
+        tickers = [t for t in tickers if pd.notna(t) and str(t).strip()]
     except FileNotFoundError:
         logger.warning("data/mapping.csv not found — skipping historical data fetch.")
         return

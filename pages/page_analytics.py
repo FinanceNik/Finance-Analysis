@@ -1,12 +1,12 @@
 import numpy as np
 import pandas as pd
+import dash_bootstrap_components as dbc
 from dash import dcc, html, Input, Output
 from datetime import datetime
 import Styles
 import config
 import dataLoadPositions as dlp
 import dataLoadTransactions as dlt
-
 
 def _compute_analytics():
     """Compute per-holding analytics and portfolio-level metrics."""
@@ -135,7 +135,6 @@ def _compute_analytics():
 
     return df, metrics, drawdown_series
 
-
 def _build_expense_ratio_section(df):
     """Build expense ratio analysis for ETFs."""
     if df.empty or "asset_type" not in df.columns:
@@ -178,12 +177,193 @@ def _build_expense_ratio_section(df):
     }
 
     return html.Div([
-        html.Hr(),
         html.Div([
             dcc.Graph(id='expense-ratio-chart', figure=chart)
-        ], className="card", style=Styles.STYLE(100)),
+        ], className="card"),
     ])
 
+def _build_fee_drag_section(df):
+    """Build cumulative fee drag analysis showing the impact of ETF expense ratios over time."""
+    if df.empty or "asset_type" not in df.columns:
+        return html.Div()
+
+    # ── Identify ETFs with TER data ──
+    etfs = df[df["asset_type"].str.lower().isin(["etf", "etfs"])].copy()
+    if etfs.empty:
+        return html.Div()
+
+    etfs["ter"] = etfs["symbol"].map(config.ETF_EXPENSE_RATIOS).fillna(0)
+    etfs_with_ter = etfs[etfs["ter"] > 0].copy()
+    if etfs_with_ter.empty:
+        return html.Div()
+
+    total_etf_value = etfs_with_ter["market_value"].sum()
+    weighted_ter = ((etfs_with_ter["ter"] * etfs_with_ter["market_value"]).sum()
+                    / total_etf_value) if total_etf_value > 0 else 0
+
+    # ── Load historical price data ──
+    try:
+        hist = pd.read_csv("data/historical_data.csv")
+        if "date" in hist.columns:
+            hist = hist.set_index("date")
+        hist = 10 ** hist  # convert from log scale
+    except Exception:
+        return html.Div()
+
+    # Map position symbols to historical columns (handle exchange suffixes)
+    symbol_to_col = {}
+    for sym in etfs_with_ter["symbol"].values:
+        if sym in hist.columns:
+            symbol_to_col[sym] = sym
+        else:
+            # Try matching with exchange suffix (e.g. SPICHA → SPICHA.SW)
+            matches = [c for c in hist.columns if c.startswith(sym)]
+            if matches:
+                symbol_to_col[sym] = matches[0]
+
+    if not symbol_to_col:
+        return html.Div()
+
+    # ── Compute per-ETF actual vs fee-free returns ──
+    weights = {}
+    for sym in symbol_to_col:
+        row = etfs_with_ter[etfs_with_ter["symbol"] == sym]
+        if not row.empty:
+            weights[sym] = row["market_value"].values[0] / total_etf_value
+
+    # Build weighted actual and fee-free series
+    actual_weighted = None
+    feefree_weighted = None
+
+    for sym, col in symbol_to_col.items():
+        if sym not in weights:
+            continue
+        prices = hist[col].dropna()
+        if len(prices) < 2:
+            continue
+
+        ter = config.ETF_EXPENSE_RATIOS.get(sym, 0)
+        daily_ter = ter / 252
+        w = weights[sym]
+
+        # Normalize to 100
+        first_price = prices.iloc[0]
+        normalized = (prices / first_price) * 100
+
+        # Daily returns (already net of fees — fees are baked into ETF NAV)
+        daily_returns = prices.pct_change().dropna()
+
+        # Fee-free return: add back the daily TER to each day's return
+        gross_daily = daily_returns + daily_ter
+        feefree = (1 + gross_daily).cumprod() * 100
+        feefree = pd.concat([pd.Series([100], index=[prices.index[0]]), feefree])
+
+        # Align to same index
+        actual_series = normalized.reindex(feefree.index)
+
+        if actual_weighted is None:
+            actual_weighted = actual_series * w
+            feefree_weighted = feefree * w
+        else:
+            # Align all series to common index
+            common_idx = actual_weighted.index.intersection(actual_series.index)
+            actual_weighted = actual_weighted.reindex(common_idx) + actual_series.reindex(common_idx) * w
+            feefree_weighted = feefree_weighted.reindex(common_idx) + feefree.reindex(common_idx) * w
+
+    if actual_weighted is None or feefree_weighted is None:
+        return html.Div()
+
+    actual_weighted = actual_weighted.dropna()
+    feefree_weighted = feefree_weighted.reindex(actual_weighted.index).dropna()
+
+    # ── Fee drag in currency terms ──
+    # The percentage gap applied to current ETF value
+    drag_pct = (feefree_weighted - actual_weighted) / 100  # as fraction of initial
+    cumulative_drag_currency = drag_pct * total_etf_value
+
+    # Current total drag
+    total_drag = cumulative_drag_currency.iloc[-1] if not cumulative_drag_currency.empty else 0
+
+    # ── 10-Year projection ──
+    # Assume portfolio grows at expected return, fees compound annually
+    g = config.EXPECTED_RETURN
+    if g > 0:
+        # Sum of geometric series: TER × value × Σ(1+g)^i for i=0..9
+        geo_sum = ((1 + g) ** 10 - 1) / g
+    else:
+        geo_sum = 10
+    projected_10yr = total_etf_value * weighted_ter * geo_sum
+
+    # ── KPIs ──
+    kpis = html.Div([
+        Styles.kpiboxes("Total Fee Drag", f"{total_drag:,.0f}", Styles.strongRed),
+        Styles.kpiboxes("Weighted TER", f"{weighted_ter:.2%}", Styles.colorPalette[3]),
+        Styles.kpiboxes("10-Yr Projected Drag", f"{projected_10yr:,.0f}", Styles.colorPalette[2]),
+    ], className="kpi-row")
+
+    # ── Chart 1: Cumulative fee drag (area) ──
+    drag_chart = {
+        'data': [{
+            'type': 'scatter',
+            'x': cumulative_drag_currency.index.tolist(),
+            'y': cumulative_drag_currency.round(0).tolist(),
+            'mode': 'lines',
+            'fill': 'tozeroy',
+            'fillcolor': 'rgba(255, 59, 48, 0.15)',
+            'line': {'color': Styles.strongRed, 'width': 2},
+            'name': 'Cumulative Fees',
+            'hovertemplate': '%{x}<br>Fee Drag: %{y:,.0f}<extra></extra>',
+        }],
+        'layout': Styles.graph_layout(
+            title='Cumulative Fee Drag',
+            xaxis={'title': 'Date', 'type': 'date'},
+            yaxis={'title': 'Fees Paid (est.)'},
+            hovermode='x unified',
+        ),
+    }
+
+    # ── Chart 2: Actual vs fee-free return (lines) ──
+    comparison_chart = {
+        'data': [
+            {
+                'type': 'scatter',
+                'x': actual_weighted.index.tolist(),
+                'y': actual_weighted.round(2).tolist(),
+                'mode': 'lines',
+                'name': 'Actual (net of fees)',
+                'line': {'color': Styles.colorPalette[0], 'width': 2},
+            },
+            {
+                'type': 'scatter',
+                'x': feefree_weighted.index.tolist(),
+                'y': feefree_weighted.round(2).tolist(),
+                'mode': 'lines',
+                'name': 'Without Fees',
+                'line': {'color': Styles.colorPalette[1], 'width': 2, 'dash': 'dash'},
+            },
+        ],
+        'layout': Styles.graph_layout(
+            title='ETF Returns: Actual vs Fee-Free',
+            xaxis={'title': 'Date', 'type': 'date'},
+            yaxis={'title': 'Indexed Value (100 = start)'},
+            hovermode='x unified',
+            legend={'orientation': 'h', 'y': -0.15, 'x': 0.5, 'xanchor': 'center'},
+            margin={'b': 60},
+        ),
+    }
+
+    return html.Div([
+        html.H5("Fee Drag Analysis"),
+        kpis,
+        html.Div([
+            html.Div([
+                dcc.Graph(id='fee-drag-chart', figure=drag_chart)
+            ], className="card"),
+            html.Div([
+                dcc.Graph(id='fee-comparison-chart', figure=comparison_chart)
+            ], className="card"),
+        ], className="grid-2"),
+    ])
 
 def _build_currency_impact(df):
     """Build currency exposure analysis."""
@@ -228,8 +408,7 @@ def _build_currency_impact(df):
 
     return html.Div([
         dcc.Graph(id='currency-impact-chart', figure=chart)
-    ], className="card", style=Styles.STYLE(48))
-
+    ], className="card")
 
 def _build_benchmark_section():
     """Build benchmark comparison chart with SPY/MSCI World overlays."""
@@ -333,11 +512,9 @@ def _build_benchmark_section():
         Styles.strongGreen if portfolio_return >= 0 else Styles.strongRed))
 
     return html.Div([
-        html.Div(alpha_kpis),
-        html.Hr(),
+        html.Div(alpha_kpis, className="kpi-row"),
         dcc.Graph(id='benchmark-chart', figure=chart),
-    ], className="card", style=Styles.STYLE(100))
-
+    ], className="card")
 
 def _build_drawdown_chart(drawdown_series):
     """Build a filled area chart showing portfolio drawdown over time."""
@@ -366,8 +543,7 @@ def _build_drawdown_chart(drawdown_series):
 
     return html.Div([
         dcc.Graph(id='drawdown-chart', figure=chart)
-    ], className="card", style=Styles.STYLE(100))
-
+    ], className="card")
 
 def _build_correlation_heatmap():
     """Build a correlation matrix heatmap from historical returns."""
@@ -406,8 +582,7 @@ def _build_correlation_heatmap():
 
     return html.Div([
         dcc.Graph(id='correlation-heatmap', figure=chart)
-    ], className="card", style=Styles.STYLE(100))
-
+    ], className="card")
 
 def _build_sector_treemap(df):
     """Build a treemap showing portfolio allocation by sector."""
@@ -440,8 +615,7 @@ def _build_sector_treemap(df):
 
     return html.Div([
         dcc.Graph(id='sector-treemap', figure=chart)
-    ], className="card", style=Styles.STYLE(48))
-
+    ], className="card")
 
 def _build_geography_treemap(df):
     """Build a treemap showing portfolio allocation by geography."""
@@ -473,15 +647,13 @@ def _build_geography_treemap(df):
 
     return html.Div([
         dcc.Graph(id='geo-treemap', figure=chart)
-    ], className="card", style=Styles.STYLE(48))
-
+    ], className="card")
 
 def layout():
     df, metrics, drawdown_series = _compute_analytics()
 
     if df.empty:
         return html.Div([
-            html.Hr(),
             html.H4("No portfolio data available."),
         ])
 
@@ -491,7 +663,7 @@ def layout():
         Styles.kpiboxes('Est. Annual Return', metrics.get("annual_return", "N/A"), Styles.colorPalette[1]),
         Styles.kpiboxes('Est. Annual Vol', metrics.get("annual_vol", "N/A"), Styles.colorPalette[2]),
         Styles.kpiboxes('Total Market Value', f"{metrics.get('total_mv', 0):,}", Styles.colorPalette[3]),
-    ])
+    ], className="kpi-row")
 
     # --- KPI row 2 (advanced metrics) ---
     kpi_row_2 = html.Div([
@@ -500,7 +672,7 @@ def layout():
         Styles.kpiboxes('Sortino Ratio', metrics.get("sortino", "N/A"), Styles.colorPalette[2]),
         Styles.kpiboxes('Concentration', metrics.get("concentration", "N/A"), Styles.colorPalette[3]),
         Styles.kpiboxes('Dividend Growth', metrics.get("div_growth", "N/A"), Styles.colorPalette[0]),
-    ])
+    ], className="kpi-row")
 
     # --- Per-holding P&L chart ---
     df_sorted = df.sort_values("unrealized_pnl", ascending=True)
@@ -567,52 +739,45 @@ def layout():
     }
 
     return html.Div([
-        html.Hr(),
         html.H4("Portfolio Analytics"),
         kpi_row,
         kpi_row_2,
-        html.Hr(),
 
-        # Benchmark comparison
-        _build_benchmark_section(),
-        html.Hr(),
-
-        # Drawdown chart
-        _build_drawdown_chart(drawdown_series),
-        html.Hr(),
-
-        # Top holdings
+        # ── Tabbed sections ──
         html.Div([
-            dcc.Graph(id='top-holdings-chart', figure=weight_chart)
-        ], className="card", style=Styles.STYLE(100)),
-        html.Hr(),
+            dbc.Tabs([
+                dbc.Tab([
+                    _build_benchmark_section(),
+                    _build_drawdown_chart(drawdown_series),
+                ], label="Performance", tab_id="tab-performance"),
 
-        # P&L charts
-        html.Div([
-            dcc.Graph(id='pnl-by-holding-chart', figure=pnl_chart)
-        ], className="card", style=Styles.STYLE(48)),
-        html.Div([''], style=Styles.FILLER()),
-        html.Div([
-            dcc.Graph(id='return-by-holding-chart', figure=return_chart)
-        ], className="card", style=Styles.STYLE(48)),
-        html.Hr(),
+                dbc.Tab([
+                    html.Div([
+                        dcc.Graph(id='top-holdings-chart', figure=weight_chart)
+                    ], className="card"),
+                    html.Div([
+                        html.Div([
+                            dcc.Graph(id='pnl-by-holding-chart', figure=pnl_chart)
+                        ], className="card"),
+                        html.Div([
+                            dcc.Graph(id='return-by-holding-chart', figure=return_chart)
+                        ], className="card"),
+                    ], className="grid-2"),
+                ], label="Holdings", tab_id="tab-holdings"),
 
-        # Currency impact
-        html.Div([
-            _build_currency_impact(df),
-            html.Div([''], style=Styles.FILLER()),
-        ]),
+                dbc.Tab([
+                    _build_currency_impact(df),
+                    _build_expense_ratio_section(df),
+                    _build_fee_drag_section(df),
+                ], label="Costs", tab_id="tab-costs"),
 
-        # Expense ratio tracking
-        _build_expense_ratio_section(df),
-        html.Hr(),
-
-        # Correlation heatmap
-        _build_correlation_heatmap(),
-        html.Hr(),
-
-        # Sector & Geography treemaps
-        _build_sector_treemap(df),
-        html.Div([''], style=Styles.FILLER()),
-        _build_geography_treemap(df),
+                dbc.Tab([
+                    _build_correlation_heatmap(),
+                    html.Div([
+                        _build_sector_treemap(df),
+                        _build_geography_treemap(df),
+                    ], className="grid-2"),
+                ], label="Risk & Diversification", tab_id="tab-risk"),
+            ], active_tab="tab-performance"),
+        ], className="analytics-tabs"),
     ])

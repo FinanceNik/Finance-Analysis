@@ -4,12 +4,10 @@ import config
 import dataLoadPositions as dlp
 import user_settings
 
-
 def layout():
     df = dlp.fetch_data()
     if df.empty or "geography" not in df.columns:
         return html.Div([
-            html.Hr(),
             html.H4("No portfolio data available for rebalancing."),
         ])
 
@@ -42,7 +40,6 @@ def layout():
         )
 
     return html.Div([
-        html.Hr(),
         html.H4("Portfolio Rebalancing Tool"),
 
         # Target allocation inputs
@@ -60,12 +57,13 @@ def layout():
             ], style={"display": "inline-block", "padding": "5px 15px"}),
         ], style={"marginBottom": "20px"}),
 
-        html.Hr(),
-
         # Results
-        html.Div(id="rebal-results"),
+        dcc.Loading(
+            html.Div(id="rebal-results", children=html.Div([
+                Styles.skeleton_kpis(3), Styles.skeleton_chart(),
+            ])),
+            type="dot"),
     ])
-
 
 def register_callbacks(app):
     @app.callback(
@@ -190,7 +188,6 @@ def register_callbacks(app):
                 html.H5("Rebalancing Alerts", style={"color": Styles.strongRed, "margin": "0 0 8px 0"}),
                 html.Div(alerts),
             ], className="card", style={
-                **Styles.STYLE(100),
                 "border": f"2px solid {Styles.strongRed}",
                 "marginBottom": "15px",
             })
@@ -201,13 +198,13 @@ def register_callbacks(app):
                 Styles.kpiboxes("Portfolio Value", f"{total:,}", Styles.colorPalette[0]),
                 Styles.kpiboxes("Total Drift", f"{total_drift:.1f}%", drift_color),
                 Styles.kpiboxes("Alert Threshold", f"{threshold}%", Styles.colorPalette[2]),
-            ]),
-            html.Hr(),
+            ], className="kpi-row"),
             html.Div([
-                dcc.Graph(id='rebal-comparison-chart', figure=comparison_chart)
-            ], className="card", style=Styles.STYLE(48)),
-            html.Div([''], style=Styles.FILLER()),
-            html.Div([
-                dcc.Graph(id='rebal-trade-chart', figure=trade_chart)
-            ], className="card", style=Styles.STYLE(48)),
+                html.Div([
+                    dcc.Graph(id='rebal-comparison-chart', figure=comparison_chart)
+                ], className="card"),
+                html.Div([
+                    dcc.Graph(id='rebal-trade-chart', figure=trade_chart)
+                ], className="card"),
+            ], className="grid-2"),
         ])

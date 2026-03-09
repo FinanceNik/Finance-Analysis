@@ -3,10 +3,8 @@ import json
 import Styles
 import dataLoadPositions as dlp
 
-
 def layout():
     return html.Div([
-        html.Hr(),
         html.H4("Financial Goals Tracker"),
 
         # --- Add new goal ---
@@ -44,12 +42,11 @@ def layout():
         # Store for goals (persisted in browser localStorage)
         dcc.Store(id="goals-store", storage_type="local", data=[]),
 
-        html.Hr(),
-
         # --- Goals display ---
-        html.Div(id="goals-display"),
+        dcc.Loading(
+            html.Div(id="goals-display", children=Styles.skeleton_kpis(4)),
+            type="dot"),
     ])
-
 
 def _build_goal_card(goal, idx):
     """Build a visual card for a single goal with progress bar."""
@@ -98,18 +95,11 @@ def _build_goal_card(goal, idx):
                 html.Span(f"{current:,.0f} / {target:,.0f}  ({pct:.0%})",
                           style={"fontSize": "14px", "fontWeight": "bold"}),
                 html.Span(f"  |  {status_text}",
-                          style={"fontSize": "13px", "color": "#666"}),
+                          style={"fontSize": "13px", "color": "var(--text-secondary, #666)"}),
             ]),
             celebration,
         ], style={"padding": "15px"}),
-    ], className="card", style={
-        "width": "30%",
-        "display": "inline-block",
-        "verticalAlign": "top",
-        "marginRight": "15px",
-        "marginBottom": "15px",
-    })
-
+    ], className="card")
 
 def register_callbacks(app):
     @app.callback(
@@ -141,7 +131,7 @@ def register_callbacks(app):
     def render_goals(goals):
         if not goals:
             return html.P("No goals set yet. Add a goal above to start tracking.",
-                          style={"color": "#888", "fontStyle": "italic"})
+                          style={"color": "var(--text-muted, #888)", "fontStyle": "italic"})
 
         # Summary KPIs
         total_target = sum(g.get("target", 0) for g in goals)
@@ -154,12 +144,11 @@ def register_callbacks(app):
             Styles.kpiboxes("Total Saved", f"{total_current:,.0f}", Styles.colorPalette[1]),
             Styles.kpiboxes("Monthly Savings", f"{total_monthly:,.0f}", Styles.colorPalette[2]),
             Styles.kpiboxes("Overall Progress", f"{overall_pct:.0%}", Styles.colorPalette[3]),
-        ])
+        ], className="kpi-row")
 
         cards = [_build_goal_card(g, i) for i, g in enumerate(goals)]
 
         return html.Div([
             kpis,
-            html.Hr(),
-            html.Div(cards),
+            html.Div(cards, className="grid-3"),
         ])

@@ -63,7 +63,7 @@ CONTENT_STYLE_DARK = {**CONTENT_STYLE}
 
 # ── Card wrapper ──
 def STYLE(width):
-    """Return inline style for a card-like container."""
+    """Deprecated: use CSS grid classes (.grid-2, .grid-3) instead."""
     return {
         'width': f'{width}%',
         'display': 'inline-block',
@@ -73,6 +73,7 @@ def STYLE(width):
 
 
 def FILLER():
+    """Deprecated: remove FILLER() calls, use CSS grid instead."""
     return {
         'width': '2%',
         'display': 'inline-block',
@@ -81,6 +82,38 @@ def FILLER():
 
 
 # ── KPI boxes (clean HTML, no DataTable hack) ──
+# ── Skeleton loading placeholders ──
+def skeleton_kpis(count=4):
+    """Shimmer skeleton row matching KPI box layout."""
+    return html.Div([
+        html.Div(
+            html.Div(className="skeleton-line skeleton-kpi"),
+            className="kpi-box",
+        ) for _ in range(count)
+    ], className="kpi-row")
+
+
+def skeleton_chart(height="300px"):
+    """Shimmer skeleton matching a chart card."""
+    return html.Div(
+        html.Div(className="skeleton-line skeleton-chart",
+                 style={"height": height}),
+        className="card", style={"padding": "16px"},
+    )
+
+
+def skeleton_table(rows=5):
+    """Shimmer skeleton matching a data table."""
+    return html.Div([
+        html.Div(className="skeleton-line",
+                 style={"height": "20px", "width": "100%", "marginBottom": "12px"}),
+    ] + [
+        html.Div(className="skeleton-line skeleton-table-row",
+                 style={"width": f"{85 + (i % 3) * 5}%"})
+        for i in range(rows)
+    ], className="card", style={"padding": "16px"})
+
+
 def kpiboxes(label_text, value, color):
     return html.Div(
         html.Div([

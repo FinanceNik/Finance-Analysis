@@ -6,14 +6,12 @@ import Styles
 import dataLoadTransactions as dlt
 import user_settings
 
-
 def _get_budget():
     """Load budget settings with safe defaults."""
     saved = user_settings.get("budget", {}) or {}
     inc = saved.get("income", {}) or {}
     exp = saved.get("expenses", {}) or {}
     return inc, exp
-
 
 def _monthly_income_fields(inc):
     """Extract monthly income components from budget."""
@@ -23,11 +21,9 @@ def _monthly_income_fields(inc):
     other = inc.get("other", 0) or 0
     return salary, side, dividends, other
 
-
 def _monthly_expense_total(exp):
     """Sum all monthly expense categories from budget."""
     return sum(v for v in exp.values() if isinstance(v, (int, float)))
-
 
 def _get_last_12_month_labels():
     """Return list of (year, month_num, label) for the last 12 months plus current month."""
@@ -43,7 +39,6 @@ def _get_last_12_month_labels():
         label = f"{dlt.months[month - 1]} {year}"
         result.append((year, month, label))
     return result
-
 
 def _get_dividend_by_month():
     """Get actual dividend amounts per (year, month) from transaction data."""
@@ -62,7 +57,6 @@ def _get_dividend_by_month():
     dividends["month"] = dividends["date"].dt.month
     grouped = dividends.groupby(["year", "month"])["net_amount"].sum()
     return grouped.to_dict()
-
 
 def _build_monthly_data():
     """Build last 12 months of income, expense, and net savings data.
@@ -129,7 +123,6 @@ def _build_monthly_data():
         monthly_expense_breakdown,
     )
 
-
 def _build_waterfall_chart(month_labels, monthly_net):
     """Build a waterfall chart showing monthly net savings with an annual total."""
     labels = month_labels + ["Total"]
@@ -158,7 +151,6 @@ def _build_waterfall_chart(month_labels, monthly_net):
         ),
     }
     return chart
-
 
 def _build_income_breakdown_chart(month_labels, monthly_salary, monthly_side, monthly_dividends):
     """Build a stacked bar chart of income sources over last 12 months."""
@@ -212,7 +204,6 @@ def _build_income_breakdown_chart(month_labels, monthly_salary, monthly_side, mo
     }
     return chart
 
-
 def _build_expense_breakdown_chart(month_labels, monthly_expense_breakdown):
     """Build a stacked bar chart of expenses by category over last 12 months."""
     colors = Styles.purple_list
@@ -248,7 +239,6 @@ def _build_expense_breakdown_chart(month_labels, monthly_expense_breakdown):
     }
     return chart
 
-
 def _build_savings_rate_chart(month_labels, monthly_income, monthly_expenses):
     """Build a line chart with filled area showing savings rate % per month."""
     savings_rates = []
@@ -281,7 +271,6 @@ def _build_savings_rate_chart(month_labels, monthly_income, monthly_expenses):
         ),
     }
     return chart
-
 
 def layout():
     inc, exp = _get_budget()
@@ -324,7 +313,6 @@ def layout():
     )
 
     return html.Div([
-        html.Hr(),
         html.H4("Income Statement"),
 
         # ── Section 1: KPI Row ──
@@ -333,8 +321,7 @@ def layout():
             Styles.kpiboxes("Annual Dividend Income", f"{annual_dividend_income:,.0f}", Styles.strongGreen),
             Styles.kpiboxes("Annual Expenses", f"{annual_expenses:,.0f}", Styles.colorPalette[2]),
             Styles.kpiboxes("Annual Net Savings", f"{annual_net_savings:,.0f}", net_color),
-        ]),
-        html.Hr(),
+        ], className="kpi-row"),
 
         # ── Section 2: Waterfall Chart (full width) ──
         html.Div([
@@ -343,26 +330,25 @@ def layout():
                 figure=waterfall,
                 config={"displayModeBar": False},
             ),
-        ], className="card", style=Styles.STYLE(100)),
-        html.Hr(),
+        ], className="card"),
 
         # ── Section 3: Income & Expense Breakdown (side by side) ──
         html.Div([
-            dcc.Graph(
-                id="income-breakdown-chart",
-                figure=income_breakdown,
-                config={"displayModeBar": False},
-            ),
-        ], className="card", style=Styles.STYLE(48)),
-        html.Div([""], style=Styles.FILLER()),
-        html.Div([
-            dcc.Graph(
-                id="expense-breakdown-chart",
-                figure=expense_breakdown,
-                config={"displayModeBar": False},
-            ),
-        ], className="card", style=Styles.STYLE(48)),
-        html.Hr(),
+            html.Div([
+                dcc.Graph(
+                    id="income-breakdown-chart",
+                    figure=income_breakdown,
+                    config={"displayModeBar": False},
+                ),
+            ], className="card"),
+            html.Div([
+                dcc.Graph(
+                    id="expense-breakdown-chart",
+                    figure=expense_breakdown,
+                    config={"displayModeBar": False},
+                ),
+            ], className="card"),
+        ], className="grid-2"),
 
         # ── Section 4: Savings Rate Trend (full width) ──
         html.Div([
@@ -371,5 +357,5 @@ def layout():
                 figure=savings_rate,
                 config={"displayModeBar": False},
             ),
-        ], className="card", style=Styles.STYLE(100)),
+        ], className="card"),
     ])

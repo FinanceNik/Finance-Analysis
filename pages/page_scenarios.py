@@ -4,10 +4,8 @@ import Styles
 import dataLoadPositions as dlp
 import user_settings
 
-
 def layout():
     return html.Div([
-        html.Hr(),
         html.H4("Scenario Planning"),
 
         # --- Input sliders ---
@@ -54,12 +52,14 @@ def layout():
         ], style={"marginBottom": "20px"}),
 
         # --- Dynamic KPIs and charts ---
-        html.Div(id="scenario-kpis"),
-        html.Hr(),
-        html.Div(id="scenario-charts"),
+        dcc.Loading(
+            html.Div(id="scenario-kpis", children=Styles.skeleton_kpis(4)),
+            type="dot"),
+        dcc.Loading(
+            html.Div(id="scenario-charts", children=Styles.skeleton_chart()),
+            type="dot"),
 
         # --- Withdrawal Strategy Simulator ---
-        html.Hr(),
         html.H4("Withdrawal Strategy Simulator"),
         html.Div([
             html.Div([
@@ -88,16 +88,16 @@ def layout():
                              ], value="4pct", clearable=False),
             ], style={"width": "22%", "display": "inline-block", "padding": "10px 20px"}),
         ]),
-        html.Div(id="withdraw-results"),
+        dcc.Loading(html.Div(id="withdraw-results", children=html.Div([
+            Styles.skeleton_kpis(4), Styles.skeleton_chart(),
+        ])), type="dot"),
     ])
-
 
 def _hex_to_rgba(hex_color, alpha):
     """Convert hex color to rgba string."""
     h = hex_color.lstrip('#')
     r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
     return f"rgba({r},{g},{b},{alpha})"
-
 
 def _project_portfolio(start_value, annual_return, annual_contribution, years):
     """Project portfolio value year by year.
@@ -111,7 +111,6 @@ def _project_portfolio(start_value, annual_return, annual_contribution, years):
         values.append(round(current))
     return values
 
-
 def _project_crash_scenario(start_value, annual_return, annual_contribution, years):
     """40 % drop in year 1, then recovery at the base return rate."""
     values = [start_value]
@@ -123,7 +122,6 @@ def _project_crash_scenario(start_value, annual_return, annual_contribution, yea
             current = current * (1 + annual_return / 100) + annual_contribution
         values.append(round(current))
     return values
-
 
 def _simulate_4pct(portfolio, annual_expenses, return_rate, years):
     """Fixed 4% Rule: withdraw 4% of initial portfolio (or annual_expenses),
@@ -137,7 +135,6 @@ def _simulate_4pct(portfolio, annual_expenses, return_rate, years):
         values.append(round(p))
     return values
 
-
 def _simulate_variable(portfolio, return_rate, years):
     """Variable % / Guardrails: base 4%, floor 3%, ceiling 5% of current value."""
     values = [portfolio]
@@ -150,7 +147,6 @@ def _simulate_variable(portfolio, return_rate, years):
         p = (p - withdrawal) * (1 + return_rate)
         values.append(round(p))
     return values
-
 
 def _simulate_bucket(portfolio, annual_expenses, return_rate, years):
     """Bucket strategy:
@@ -183,7 +179,6 @@ def _simulate_bucket(portfolio, annual_expenses, return_rate, years):
         total = b1 + b2 + b3
         values.append(round(total))
     return values
-
 
 def register_callbacks(app):
     @app.callback(
@@ -241,7 +236,7 @@ def register_callbacks(app):
             Styles.kpiboxes("Total Contributed", f"{total_contributed:,.0f}", Styles.colorPalette[2]),
             Styles.kpiboxes("Total Growth", f"{total_growth:,.0f}",
                             Styles.strongGreen if total_growth >= 0 else Styles.strongRed),
-        ])
+        ], className="kpi-row")
 
         # ── Chart 1: Portfolio Projection Scenarios (full width) ──
         scenario_chart = {
@@ -363,17 +358,16 @@ def register_callbacks(app):
         charts = html.Div([
             html.Div([
                 dcc.Graph(id='scenario-projection-chart', figure=scenario_chart)
-            ], className="card", style=Styles.STYLE(100)),
+            ], className="card"),
 
             html.Div([
-                dcc.Graph(id='scenario-savings-chart', figure=savings_chart)
-            ], className="card", style=Styles.STYLE(48)),
-
-            html.Div([''], style=Styles.FILLER()),
-
-            html.Div([
-                dcc.Graph(id='scenario-inflation-chart', figure=inflation_chart)
-            ], className="card", style=Styles.STYLE(48)),
+                html.Div([
+                    dcc.Graph(id='scenario-savings-chart', figure=savings_chart)
+                ], className="card"),
+                html.Div([
+                    dcc.Graph(id='scenario-inflation-chart', figure=inflation_chart)
+                ], className="card"),
+            ], className="grid-2"),
         ])
 
         return kpis, charts
@@ -456,7 +450,7 @@ def register_callbacks(app):
             Styles.kpiboxes("Safe Withdrawal Rate",
                             f"{safe_wr:.1f}%",
                             Styles.purple_list[0]),
-        ])
+        ], className="kpi-row")
 
         # ── Overlay chart: all 3 strategies ──
         year_labels = list(range(years + 1))
@@ -500,7 +494,7 @@ def register_callbacks(app):
         chart_div = html.Div([
             html.Div([
                 dcc.Graph(id='withdraw-comparison-chart', figure=withdraw_chart)
-            ], className="card", style=Styles.STYLE(100)),
+            ], className="card"),
         ])
 
-        return html.Div([kpis, html.Hr(), chart_div])
+        return html.Div([kpis, chart_div])

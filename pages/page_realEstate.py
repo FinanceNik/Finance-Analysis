@@ -2,10 +2,8 @@ from dash import dcc, html, Input, Output
 import Styles
 import dataLoadRealEstate as dlre
 
-
 def layout():
     return html.Div([
-        html.Hr(),
         html.H4("Real Estate Investment Projection"),
 
         # --- Input controls ---
@@ -59,18 +57,16 @@ def layout():
         ], style={"marginBottom": "10px"}),
 
         # --- KPI boxes (dynamic) ---
-        html.Div(id="re-kpi-boxes"),
-        html.Hr(),
+        html.Div(id="re-kpi-boxes", children=Styles.skeleton_kpis(4)),
 
         # --- Chart ---
         html.Div([
             dcc.Loading(
                 dcc.Graph(id='re-projection-chart'),
-                type="circle",
+                type="dot",
             )
-        ], className="card", style=Styles.STYLE(100))
+        ], className="card")
     ])
-
 
 def register_callbacks(app):
     @app.callback(
@@ -111,7 +107,7 @@ def register_callbacks(app):
             Styles.kpiboxes('Annual Net Cash Flow', f"{annual_income - annual_costs:,.0f}", Styles.colorPalette[1]),
             Styles.kpiboxes(f'Value After {years}y', f"{final_value:,.0f}", Styles.colorPalette[2]),
             Styles.kpiboxes('Total Net Profit', f"{net_profit:,.0f}", Styles.colorPalette[3]),
-        ])
+        ], className="kpi-row")
 
         figure = {
             'data': [

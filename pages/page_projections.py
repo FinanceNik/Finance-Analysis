@@ -3,10 +3,8 @@ import Styles
 import dataTransformationProjections as dtp
 import user_settings
 
-
 def layout():
     return html.Div([
-        html.Hr(),
         html.H4("Monte Carlo Portfolio Simulation"),
         html.Div([
             html.Div([
@@ -40,16 +38,14 @@ def layout():
             ], style={"width": "30%", "display": "inline-block", "padding": "10px 20px"}),
         ], style={"marginBottom": "20px"}),
 
-        html.Div(id="proj-kpis"),
-        html.Hr(),
+        html.Div(id="proj-kpis", children=Styles.skeleton_kpis(4)),
         html.Div([
             dcc.Loading(
                 dcc.Graph(id='proj-monte-carlo-chart'),
-                type="circle",
+                type="dot",
             )
-        ], className="card", style=Styles.STYLE(100))
+        ], className="card")
     ])
-
 
 def register_callbacks(app):
     @app.callback(
@@ -92,7 +88,7 @@ def register_callbacks(app):
             Styles.kpiboxes("90th Percentile", f"{p90_final:,.0f}", Styles.strongGreen),
             Styles.kpiboxes("FIRE Probability", f"{fire_prob:.0f}%",
                             Styles.strongGreen if fire_prob >= 80 else Styles.colorPalette[3]),
-        ])
+        ], className="kpi-row")
 
         # Build percentile band traces
         traces = [
