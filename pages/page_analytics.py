@@ -101,17 +101,18 @@ def _compute_analytics():
     div_growth = None
     try:
         current_year = datetime.today().year
-        div_this_year = dlt.total_transaction_amount(current_year, "Dividend")
-        div_last_year = dlt.total_transaction_amount(current_year - 1, "Dividend")
+        # Use abs() since dividends may be stored as negative net_amount
+        div_this_year = abs(dlt.total_transaction_amount(current_year, "Dividend"))
+        div_last_year = abs(dlt.total_transaction_amount(current_year - 1, "Dividend"))
         # Annualize current year dividends if not full year yet
         today = datetime.today()
         day_of_year = today.timetuple().tm_yday
         days_in_year = 366 if (current_year % 4 == 0 and (current_year % 100 != 0 or current_year % 400 == 0)) else 365
-        if day_of_year > 30 and div_this_year != 0:
+        if day_of_year > 30 and div_this_year > 0:
             annualized_this_year = div_this_year * (days_in_year / day_of_year)
         else:
             annualized_this_year = div_this_year
-        if div_last_year != 0 and abs(div_last_year) > 0:
+        if div_last_year > 0:
             div_growth = (annualized_this_year / div_last_year - 1) * 100
     except Exception:
         div_growth = None

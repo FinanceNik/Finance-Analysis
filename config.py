@@ -5,6 +5,9 @@ DATA_DIR = "data"
 # Risk-free rate for Sharpe ratio calculation
 RISK_FREE_RATE = 0.02
 
+# Expected annual portfolio return (used for fee drag projections)
+EXPECTED_RETURN = 0.08
+
 # Default Monte Carlo parameters
 MC_DEFAULT_RUNS = 200
 MC_DEFAULT_RETURN = 8       # percent

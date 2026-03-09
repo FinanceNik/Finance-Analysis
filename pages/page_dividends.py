@@ -46,7 +46,7 @@ def _build_kpi_row(dividends):
     # YoY growth (last two complete years)
     yearly = dividends.groupby(dividends["date"].dt.year)["amount"].sum().sort_index()
     complete = yearly[yearly.index < current_year]
-    if len(complete) >= 2:
+    if len(complete) >= 2 and complete.iloc[-2] > 0:
         yoy_growth = (complete.iloc[-1] - complete.iloc[-2]) / complete.iloc[-2] * 100
     else:
         yoy_growth = 0

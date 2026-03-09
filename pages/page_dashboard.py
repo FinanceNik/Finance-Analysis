@@ -72,9 +72,9 @@ def _build_dividend_sparkline():
             ),
         }
 
-    # Combine previous year and current year to show last 12 months of activity
-    prev_labels = [f"{m} {dlt.currentYear - 1}" for m in months]
-    curr_labels = [f"{m} {dlt.currentYear}" for m in months]
+    # Normalize to positive values (dividends may be stored as negative)
+    vals_prev = [abs(v) for v in vals_prev]
+    vals_current = [abs(v) for v in vals_current]
 
     return {
         'data': [
@@ -325,6 +325,7 @@ def _get_dividend_sparkline():
     """Get monthly dividend totals for sparkline."""
     try:
         _, _, _, vals = dlt.monthly_totals("Dividend")
+        vals = [abs(v) for v in vals]  # Normalize to positive
         return vals if len(vals) >= 2 else None
     except Exception:
         return None
