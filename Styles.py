@@ -158,3 +158,32 @@ def kpiboxes_spark(label_text, value, color, data_points=None):
         ], className="kpi-inner", style={"backgroundColor": color}),
         className="kpi-box",
     )
+
+
+def kpiboxes_ref(label_text, value, color, ref_label="", ref_pct=None):
+    """KPI box with a reference comparison line.
+
+    ref_label: e.g. "52w avg: 16.2"
+    ref_pct:   e.g. +14.3 (positive = up arrow green, negative = down arrow red)
+    """
+    ref_children = []
+    if ref_label:
+        ref_children.append(html.Span(ref_label, className="kpi-ref-label"))
+    if ref_pct is not None:
+        arrow = "\u25B2" if ref_pct >= 0 else "\u25BC"
+        pct_color = strongGreen if ref_pct >= 0 else strongRed
+        ref_children.append(html.Span(
+            f" {arrow}{abs(ref_pct):.1f}%",
+            style={"color": pct_color, "fontWeight": "600"},
+        ))
+
+    ref_line = html.Div(ref_children, className="kpi-ref") if ref_children else html.Div()
+
+    return html.Div(
+        html.Div([
+            html.Div(label_text, className="kpi-label"),
+            html.Div(str(value), className="kpi-value"),
+            ref_line,
+        ], className="kpi-inner", style={"backgroundColor": color}),
+        className="kpi-box",
+    )

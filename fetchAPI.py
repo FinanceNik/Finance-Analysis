@@ -62,3 +62,55 @@ def fetch_historical_data_yfinance():
     combined_df_log.index = combined_df_log.index.strftime("%Y-%m-%d")
     combined_df_log.index.name = "date"
     combined_df_log.to_csv("data/historical_data.csv", index=True)
+
+
+def fetch_macro_data():
+    """Fetch macroeconomic indicator data from Yahoo Finance.
+
+    Downloads 5 years of daily close prices for all tickers in
+    config.MACRO_TICKERS and saves raw (non-log) prices to
+    data/macro_data.csv.
+    """
+    tickers = list(config.MACRO_TICKERS.values())
+    if not tickers:
+        logger.warning("No macro tickers configured — skipping.")
+        return
+
+    try:
+        raw = yf.download(tickers, period="5y", group_by="ticker",
+                          auto_adjust=True, threads=True)
+    except Exception as e:
+        logger.warning("Batch macro download failed: %s", e)
+        return
+
+    if raw.empty:
+        logger.warning("No macro data returned from yfinance.")
+        return
+
+    # Build a clean DataFrame with one Close column per ticker
+    close_frames = []
+    ticker_to_key = {v: k for k, v in config.MACRO_TICKERS.items()}
+
+    for ticker in tickers:
+        key = ticker_to_key.get(ticker, ticker)
+        try:
+            if len(tickers) == 1:
+                series = raw["Close"]
+            else:
+                series = raw[(ticker, "Close")] if (ticker, "Close") in raw.columns else raw[ticker]["Close"]
+            close_frames.append(series.rename(key))
+        except Exception as e:
+            logger.warning("Could not extract Close for %s: %s", ticker, e)
+
+    if not close_frames:
+        logger.warning("No macro close prices extracted.")
+        return
+
+    combined = pd.concat(close_frames, axis=1)
+    combined.index = pd.to_datetime(combined.index)
+    combined = combined.sort_index()
+    combined.index = combined.index.strftime("%Y-%m-%d")
+    combined.index.name = "date"
+    combined.to_csv("data/macro_data.csv", index=True)
+    logger.info("Macro data saved: %d rows, %d indicators.",
+                len(combined), len(combined.columns))

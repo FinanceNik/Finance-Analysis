@@ -296,6 +296,234 @@ p  { color: var(--text-secondary); }
     letter-spacing: -0.02em;
 }
 
+/* ===== KPI Reference Line (macro page) ===== */
+.kpi-ref {
+    font-size: 0.6875rem;
+    margin-top: 4px;
+    opacity: 0.85;
+    white-space: nowrap;
+    line-height: 1.3;
+}
+.kpi-ref-label {
+    opacity: 0.75;
+}
+
+/* ===== Period Selector (macro page) ===== */
+.period-selector {
+    margin-bottom: 20px;
+}
+.period-selector .form-check {
+    display: inline-block;
+    margin-right: 0;
+    padding: 0;
+}
+.period-selector .form-check-label {
+    display: inline-block;
+    padding: 6px 16px;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 0;
+    cursor: pointer;
+    background: var(--bg-card);
+    transition: all var(--transition);
+    margin: 0;
+}
+.period-selector .form-check:first-child .form-check-label {
+    border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+}
+.period-selector .form-check:last-child .form-check-label {
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+.period-selector .form-check-input:checked + .form-check-label {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+}
+.period-selector .form-check-input {
+    display: none;
+}
+
+/* ===== Macro Section Headers ===== */
+.macro-section-title {
+    font-size: 0.9375rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin: 24px 0 10px 0;
+    letter-spacing: -0.01em;
+}
+.macro-section-title:first-of-type {
+    margin-top: 8px;
+}
+
+.macro-section-desc {
+    font-size: 0.8125rem;
+    color: var(--text-muted);
+    margin: -4px 0 12px 0;
+    line-height: 1.5;
+    max-width: 720px;
+}
+
+/* ===== Signal Panel ===== */
+.signal-panel {
+    padding: 20px 24px;
+    margin-bottom: 24px;
+    border-left: 3px solid var(--accent);
+}
+
+.signal-panel-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.signal-panel-icon {
+    font-size: 1.1rem;
+    color: var(--accent);
+    margin-right: 6px;
+}
+
+.signal-panel-title {
+    font-size: 0.9375rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    letter-spacing: -0.01em;
+}
+
+.signal-panel-grid {
+    display: grid;
+    grid-template-columns: 1fr 1.6fr;
+    gap: 24px;
+    margin-bottom: 16px;
+}
+
+.signal-panel-left {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 10px;
+}
+
+.signal-overall-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.signal-overall-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-top: 4px;
+}
+
+.signal-overall-score {
+    font-size: 0.8125rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.signal-panel-right {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.signal-breakdown-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 4px;
+}
+
+.signal-section-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.signal-section-name {
+    width: 90px;
+    flex-shrink: 0;
+    font-size: 0.8125rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.signal-section-gauge {
+    flex: 1;
+    min-width: 0;
+}
+
+.signal-section-score {
+    width: 36px;
+    text-align: right;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+}
+
+.signal-gauge-track {
+    width: 100%;
+    height: 8px;
+    background: var(--progress-bg, rgba(0,0,0,0.08));
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.signal-action-badge {
+    display: inline-block;
+    color: #fff;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+    line-height: 1.4;
+}
+
+.signal-action-lg {
+    font-size: 0.8125rem;
+    padding: 4px 14px;
+    border-radius: 12px;
+}
+
+.signal-contributors {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border-color);
+}
+
+.signal-contributor-line {
+    font-size: 0.8125rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+
+.signal-disclaimer {
+    font-size: 0.6875rem;
+    color: var(--text-muted);
+    margin: 12px 0 0 0;
+    opacity: 0.7;
+}
+
+@media (max-width: 768px) {
+    .signal-panel-grid {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+}
+
 /* ===== Horizontal Rules ===== */
 hr {
     border: none;

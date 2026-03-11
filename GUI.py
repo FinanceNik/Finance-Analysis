@@ -11,10 +11,13 @@ from pages import (page_positions, page_transactions, page_about,  # noqa: E501
                    page_projections, page_realEstate, page_analytics,
                    page_networth, page_goals, page_rebalancing,
                    page_budget, page_dashboard, page_scenarios, page_income,
-                   page_dividends)
+                   page_dividends, page_macro, page_backtest)
 import fetchAPI
+import dataLoadMacro as dlm
+import backtestEngine as bte
 
 fetchAPI.fetch_historical_data_yfinance()
+fetchAPI.fetch_macro_data()
 
 basePath = ''
 app = dash.Dash(__name__, suppress_callback_exceptions=True,
@@ -36,6 +39,8 @@ PAGE_MAP = {
     "/scenarios": ("Planning", "Scenarios"),
     "/real-estate": ("Planning", "Real Estate"),
     "/goals": ("Planning", "Goals"),
+    "/macro": ("Macro", "Macro Dashboard"),
+    "/backtest": ("Macro", "Strategy Backtest"),
     "/about": ("", "About"),
 }
 
@@ -49,6 +54,8 @@ _ICONS = {
     "Dividends": "\u2756",
     "Projections": "\u25D0", "Scenarios": "\u26A1",
     "Real Estate": "\u2302", "Goals": "\u25C9",
+    "Macro Dashboard": "\u25C9",
+    "Strategy Backtest": "\u25B7",
     "About": "\u24D8",
 }
 
@@ -102,6 +109,10 @@ sidebar = html.Div(
             _nav_link("Real Estate", f"{basePath}/real-estate"),
             _nav_link("Goals", f"{basePath}/goals"),
         ], "planning"),
+        _nav_section("Macro", [
+            _nav_link("Macro Dashboard", f"{basePath}/macro"),
+            _nav_link("Strategy Backtest", f"{basePath}/backtest"),
+        ], "macro"),
         dbc.Nav([
             _nav_link("About", f"{basePath}/about"),
         ], vertical=True, pills=True, style={"marginTop": "12px"}),
@@ -214,14 +225,15 @@ def update_breadcrumb(pathname):
 # --- Collapsible sidebar sections ---
 app.clientside_callback(
     """
-    function(pathname, n1, n2, n3, n4) {
-        var sections = ['overview', 'portfolio', 'income', 'planning'];
+    function(pathname, n1, n2, n3, n4, n5) {
+        var sections = ['overview', 'portfolio', 'income', 'planning', 'macro'];
         var paths = {
             'overview': ['/', '/net-worth'],
             'portfolio': ['/positions', '/analytics', '/transactions',
                           '/rebalancing'],
             'income': ['/budget', '/income-statement', '/dividends'],
             'planning': ['/projections', '/scenarios', '/real-estate', '/goals'],
+            'macro': ['/macro', '/backtest'],
         };
 
         var triggered = dash_clientside.callback_context.triggered;
@@ -263,7 +275,8 @@ app.clientside_callback(
      Input("nav-header-overview", "n_clicks"),
      Input("nav-header-portfolio", "n_clicks"),
      Input("nav-header-income", "n_clicks"),
-     Input("nav-header-planning", "n_clicks")],
+     Input("nav-header-planning", "n_clicks"),
+     Input("nav-header-macro", "n_clicks")],
     prevent_initial_call=False
 )
 
@@ -293,7 +306,10 @@ def refresh_data(n_clicks):
         return False, ""
     dlp.fetch_data.cache_clear()
     dlt.ingest_transactions.cache_clear()
+    dlm.load_macro_data.cache_clear()
+    bte.clear_cache()
     fetchAPI.fetch_historical_data_yfinance()
+    fetchAPI.fetch_macro_data()
     return True, f"Portfolio data updated at {datetime.now().strftime('%H:%M:%S')}"
 
 
@@ -340,6 +356,10 @@ def render_page_content(pathname):
         return page_income.layout()
     elif pathname == f"{basePath}/dividends":
         return page_dividends.layout()
+    elif pathname == f"{basePath}/macro":
+        return page_macro.layout()
+    elif pathname == f"{basePath}/backtest":
+        return page_backtest.layout()
     elif pathname == f"{basePath}/about":
         return page_about.render_page_content()
 
@@ -354,6 +374,8 @@ page_rebalancing.register_callbacks(app)
 page_budget.register_callbacks(app)
 page_scenarios.register_callbacks(app)
 page_dividends.register_callbacks(app)
+page_macro.register_callbacks(app)
+page_backtest.register_callbacks(app)
 
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=8080, debug=False)
+    app.run(host='0.0.0.0', port=8080, debug=True)
