@@ -12,7 +12,7 @@ def _compute_analytics():
     """Compute per-holding analytics and portfolio-level metrics."""
     df = dlp.add_position_pnl_columns()
     if df.empty:
-        return df, {}, pd.DataFrame()
+        return df, {}, pd.DataFrame(), pd.Series(dtype=float)
 
     total_mv = df["market_value"].sum()
     df["weight"] = df["market_value"] / total_mv
@@ -133,12 +133,19 @@ def _compute_analytics():
     except Exception:
         div_growth = None
 
+    # --- Value at Risk (95% historical) ---
+    var_95 = None
+    try:
+        if portfolio_daily is not None and len(portfolio_daily) > 20:
+            var_95 = float(np.percentile(portfolio_daily, 5)) * total_mv
+    except Exception:
+        var_95 = None
+
     metrics = {
         "sharpe": round(portfolio_sharpe, 2) if portfolio_sharpe is not None else "N/A",
         "annual_return": f"{portfolio_return * 100:.1f}%" if portfolio_return is not None else "N/A",
         "annual_vol": f"{portfolio_vol * 100:.1f}%" if portfolio_vol is not None else "N/A",
         "total_mv": int(total_mv),
-        # New KPIs
         "cagr": f"{cagr * 100:.1f}%" if cagr is not None else "N/A",
         "max_drawdown": f"{max_drawdown * 100:.1f}%" if max_drawdown is not None else "N/A",
         "sortino": round(sortino_ratio, 2) if sortino_ratio is not None else "N/A",
@@ -148,9 +155,12 @@ def _compute_analytics():
             else "N/A"
         ),
         "div_growth": f"{div_growth:+.1f}%" if div_growth is not None else "N/A",
+        "var_95": f"{var_95:,.0f}" if var_95 is not None else "N/A",
     }
 
-    return df, metrics, drawdown_series
+    # Return portfolio_daily for rolling charts
+    p_daily = portfolio_daily if portfolio_daily is not None else pd.Series(dtype=float)
+    return df, metrics, drawdown_series, p_daily
 
 def _build_expense_ratio_section(df):
     """Build expense ratio analysis for ETFs."""
@@ -666,8 +676,309 @@ def _build_geography_treemap(df):
         dcc.Graph(id='geo-treemap', figure=chart)
     ], className="card")
 
+def _build_rolling_sharpe(portfolio_daily):
+    """Build a 252-day (12-month) rolling Sharpe ratio chart."""
+    if portfolio_daily.empty or len(portfolio_daily) < 252:
+        return html.Div()
+
+    window = 252
+    rolling_mean = portfolio_daily.rolling(window).mean() * 252
+    rolling_std = portfolio_daily.rolling(window).std() * np.sqrt(252)
+    rolling_sharpe = ((rolling_mean - config.RISK_FREE_RATE) / rolling_std).dropna()
+
+    if rolling_sharpe.empty:
+        return html.Div()
+
+    colors = [Styles.strongGreen if v >= 0 else Styles.strongRed
+              for v in rolling_sharpe.values]
+
+    chart = {
+        'data': [{
+            'type': 'bar',
+            'x': rolling_sharpe.index.tolist(),
+            'y': rolling_sharpe.round(3).tolist(),
+            'marker': {'color': colors},
+            'name': 'Rolling Sharpe',
+            'hovertemplate': '%{x}<br>Sharpe: %{y:.2f}<extra></extra>',
+        }],
+        'layout': Styles.graph_layout(
+            title='Rolling 12-Month Sharpe Ratio',
+            xaxis={'title': 'Date', 'type': 'date'},
+            yaxis={'title': 'Sharpe Ratio'},
+            hovermode='x unified',
+        ),
+    }
+
+    return html.Div([
+        dcc.Graph(id='rolling-sharpe-chart', figure=chart)
+    ], className="card")
+
+
+def _build_var_chart(portfolio_daily, total_mv):
+    """Build a VaR distribution histogram."""
+    if portfolio_daily.empty or len(portfolio_daily) < 20:
+        return html.Div()
+
+    daily_pnl = (portfolio_daily * total_mv).dropna()
+    var_95 = float(np.percentile(daily_pnl, 5))
+    var_99 = float(np.percentile(daily_pnl, 1))
+
+    chart = {
+        'data': [{
+            'type': 'histogram',
+            'x': daily_pnl.round(0).tolist(),
+            'nbinsx': 80,
+            'marker': {'color': Styles.colorPalette[0], 'opacity': 0.7},
+            'name': 'Daily P&L',
+        }],
+        'layout': {
+            **Styles.graph_layout(
+                title=f'Daily P&L Distribution (VaR 95%: {var_95:,.0f} | VaR 99%: {var_99:,.0f})',
+                xaxis={'title': 'Daily P&L'},
+                yaxis={'title': 'Frequency'},
+            ),
+            'shapes': [
+                {'type': 'line', 'x0': var_95, 'x1': var_95, 'y0': 0, 'y1': 1,
+                 'yref': 'paper', 'line': {'color': Styles.strongRed, 'width': 2, 'dash': 'dash'}},
+                {'type': 'line', 'x0': var_99, 'x1': var_99, 'y0': 0, 'y1': 1,
+                 'yref': 'paper', 'line': {'color': '#FF0000', 'width': 2, 'dash': 'dot'}},
+            ],
+            'annotations': [
+                {'x': var_95, 'y': 0.95, 'yref': 'paper', 'text': f'VaR 95%: {var_95:,.0f}',
+                 'showarrow': False, 'xanchor': 'right', 'font': {'color': Styles.strongRed}},
+                {'x': var_99, 'y': 0.85, 'yref': 'paper', 'text': f'VaR 99%: {var_99:,.0f}',
+                 'showarrow': False, 'xanchor': 'right', 'font': {'color': '#FF0000'}},
+            ],
+        },
+    }
+
+    return html.Div([
+        dcc.Graph(id='var-distribution-chart', figure=chart)
+    ], className="card")
+
+
+def _build_portfolio_vs_cost_basis():
+    """Build overlay of cumulative market value vs cost basis over time."""
+    txn_df = dlt.ingest_transactions()
+    if txn_df.empty:
+        return html.Div()
+
+    buys_sells = txn_df[txn_df['transaction'].str.lower().isin(['buy', 'sell'])].copy()
+    if buys_sells.empty:
+        return html.Div()
+
+    buys_sells = buys_sells.sort_values('date')
+    # Cost basis: cumulative sum of buy amounts (negative = money spent, so negate)
+    buys_sells['cost_contrib'] = -buys_sells['net_amount']
+    buys_sells['cum_cost'] = buys_sells['cost_contrib'].cumsum()
+
+    # Load historical portfolio value
+    try:
+        hist = dlp.load_historical_data().reset_index()
+        if "date" in hist.columns:
+            hist = hist.set_index("date")
+        hist = 10 ** hist
+
+        # Get current quantities per symbol for weighting
+        pos_df = dlp.add_position_pnl_columns()
+        if pos_df.empty:
+            return html.Div()
+
+        # Build portfolio value series using current holdings
+        holding_values = {}
+        for _, row in pos_df.iterrows():
+            sym = row.get("symbol", "")
+            qty = row.get("quantity", 0)
+            col = sym if sym in hist.columns else next(
+                (c for c in hist.columns if c.startswith(sym)), None)
+            if col:
+                holding_values[col] = qty
+
+        if not holding_values:
+            return html.Div()
+
+        portfolio_value = sum(hist[col] * qty for col, qty in holding_values.items()
+                             if col in hist.columns)
+        portfolio_value = portfolio_value.dropna()
+        if portfolio_value.empty:
+            return html.Div()
+    except Exception:
+        return html.Div()
+
+    # Build cost basis time series (step function)
+    cost_dates = buys_sells['date'].dt.strftime('%Y-%m-%d').tolist()
+    cost_values = buys_sells['cum_cost'].round(0).tolist()
+
+    chart = {
+        'data': [
+            {
+                'type': 'scatter',
+                'x': portfolio_value.index.tolist(),
+                'y': portfolio_value.round(0).tolist(),
+                'mode': 'lines',
+                'name': 'Portfolio Value',
+                'line': {'color': Styles.colorPalette[0], 'width': 2},
+            },
+            {
+                'type': 'scatter',
+                'x': cost_dates,
+                'y': cost_values,
+                'mode': 'lines',
+                'name': 'Cost Basis',
+                'line': {'color': Styles.colorPalette[2], 'width': 2, 'dash': 'dash'},
+                'fill': 'tonexty',
+                'fillcolor': 'rgba(76, 175, 80, 0.1)',
+            },
+        ],
+        'layout': Styles.graph_layout(
+            title='Portfolio Value vs Cost Basis',
+            xaxis={'title': 'Date', 'type': 'date'},
+            yaxis={'title': 'Value'},
+            hovermode='x unified',
+            legend={'orientation': 'h', 'y': -0.12, 'x': 0.5, 'xanchor': 'center'},
+        ),
+    }
+
+    return html.Div([
+        dcc.Graph(id='portfolio-vs-cost-chart', figure=chart)
+    ], className="card")
+
+
+def _build_dividend_yield_chart(df):
+    """Build dividend yield per holding bar chart."""
+    if df.empty:
+        return html.Div()
+
+    txn_df = dlt.ingest_transactions()
+    if txn_df.empty:
+        return html.Div()
+
+    current_year = datetime.today().year
+    # Get last 12 months of dividends per symbol
+    twelve_months_ago = datetime.today() - pd.Timedelta(days=365)
+    divs = txn_df[
+        (txn_df['transaction'] == 'Dividend') &
+        (txn_df['date'] >= twelve_months_ago)
+    ].copy()
+
+    if divs.empty:
+        return html.Div()
+
+    div_by_symbol = divs.groupby('symbol')['net_amount'].sum().abs()
+
+    # Match to positions and compute yield
+    yields = []
+    for _, row in df.iterrows():
+        sym = row.get('symbol', '')
+        mv = row.get('market_value', 0)
+        annual_div = div_by_symbol.get(sym, 0)
+        if mv > 0 and annual_div > 0:
+            yields.append({
+                'symbol': sym,
+                'yield': (annual_div / mv) * 100,
+                'annual_div': annual_div,
+            })
+
+    if not yields:
+        return html.Div()
+
+    yield_df = pd.DataFrame(yields).sort_values('yield', ascending=True)
+
+    chart = {
+        'data': [{
+            'type': 'bar',
+            'x': yield_df['yield'].round(2).tolist(),
+            'y': yield_df['symbol'].tolist(),
+            'orientation': 'h',
+            'marker': {'color': Styles.colorPalette[1]},
+            'text': [f"{y:.2f}%" for y in yield_df['yield']],
+            'textposition': 'outside',
+            'hovertemplate': '%{y}<br>Yield: %{x:.2f}%<br>Annual Div: %{customdata:,.0f}<extra></extra>',
+            'customdata': yield_df['annual_div'].tolist(),
+        }],
+        'layout': {
+            **Styles.graph_layout(
+                title='Trailing 12-Month Dividend Yield by Holding',
+                xaxis={'title': 'Yield (%)', 'ticksuffix': '%'},
+                margin={'t': 40, 'b': 40, 'l': 100, 'r': 60},
+            ),
+            'height': max(250, len(yield_df) * 35),
+        },
+    }
+
+    return html.Div([
+        dcc.Graph(id='dividend-yield-chart', figure=chart)
+    ], className="card")
+
+
+def _build_monthly_returns_heatmap(portfolio_daily):
+    """Build a calendar heatmap of monthly returns (months x years)."""
+    if portfolio_daily.empty:
+        return html.Div()
+
+    # Compute monthly returns from daily
+    monthly = (1 + portfolio_daily).resample('ME').prod() - 1
+    monthly = monthly.dropna()
+
+    if monthly.empty:
+        return html.Div()
+
+    # Build year x month matrix
+    monthly_df = pd.DataFrame({
+        'year': monthly.index.year,
+        'month': monthly.index.month,
+        'return': (monthly.values * 100).round(2),
+    })
+
+    month_labels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    years = sorted(monthly_df['year'].unique())
+
+    # Build z-matrix (years as rows, months as columns)
+    z = []
+    text = []
+    for year in years:
+        row = []
+        text_row = []
+        for month in range(1, 13):
+            val = monthly_df[(monthly_df['year'] == year) & (monthly_df['month'] == month)]['return']
+            if not val.empty:
+                v = float(val.iloc[0])
+                row.append(v)
+                text_row.append(f"{v:+.2f}%")
+            else:
+                row.append(None)
+                text_row.append("")
+        z.append(row)
+        text.append(text_row)
+
+    chart = {
+        'data': [{
+            'type': 'heatmap',
+            'z': z,
+            'x': month_labels,
+            'y': [str(y) for y in years],
+            'colorscale': [[0, Styles.strongRed], [0.5, '#FFFFFF'], [1, Styles.strongGreen]],
+            'zmid': 0,
+            'text': text,
+            'texttemplate': '%{text}',
+            'hovertemplate': '%{y} %{x}: %{text}<extra></extra>',
+            'colorbar': {'title': 'Return %', 'ticksuffix': '%'},
+        }],
+        'layout': Styles.graph_layout(
+            title='Monthly Returns Heatmap',
+            height=max(250, len(years) * 40 + 80),
+            margin={'l': 60, 'b': 40, 't': 40, 'r': 80},
+        ),
+    }
+
+    return html.Div([
+        dcc.Graph(id='monthly-returns-heatmap', figure=chart)
+    ], className="card")
+
+
 def layout():
-    df, metrics, drawdown_series = _compute_analytics()
+    df, metrics, drawdown_series, portfolio_daily = _compute_analytics()
 
     if df.empty:
         return html.Div([
@@ -688,6 +999,7 @@ def layout():
         Styles.kpiboxes('CAGR', metrics.get("cagr", "N/A"), Styles.colorPalette[0]),
         Styles.kpiboxes('Max Drawdown', metrics.get("max_drawdown", "N/A"), Styles.colorPalette[1]),
         Styles.kpiboxes('Sortino Ratio', metrics.get("sortino", "N/A"), Styles.colorPalette[2]),
+        Styles.kpiboxes('Daily VaR (95%)', metrics.get("var_95", "N/A"), Styles.strongRed),
         Styles.kpiboxes('Concentration', metrics.get("concentration", "N/A"), Styles.colorPalette[3]),
         Styles.kpiboxes('Dividend Growth', metrics.get("div_growth", "N/A"), Styles.colorPalette[0]),
     ], className="kpi-row")
@@ -767,7 +1079,9 @@ def layout():
                 dbc.Tabs([
                     dbc.Tab([
                         _build_benchmark_section(),
+                        _build_portfolio_vs_cost_basis(),
                         _build_drawdown_chart(drawdown_series),
+                        _build_monthly_returns_heatmap(portfolio_daily),
                     ], label="Performance", tab_id="tab-performance"),
 
                     dbc.Tab([
@@ -782,6 +1096,7 @@ def layout():
                                 dcc.Graph(id='return-by-holding-chart', figure=return_chart)
                             ], className="card"),
                         ], className="grid-2"),
+                        _build_dividend_yield_chart(df),
                     ], label="Holdings", tab_id="tab-holdings"),
 
                     dbc.Tab([
@@ -791,6 +1106,8 @@ def layout():
                     ], label="Costs", tab_id="tab-costs"),
 
                     dbc.Tab([
+                        _build_rolling_sharpe(portfolio_daily),
+                        _build_var_chart(portfolio_daily, metrics.get("total_mv", 0)),
                         _build_correlation_heatmap(),
                         html.Div([
                             _build_sector_treemap(df),
