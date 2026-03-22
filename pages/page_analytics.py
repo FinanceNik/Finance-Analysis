@@ -8,6 +8,26 @@ import config
 import dataLoadPositions as dlp
 import dataLoadTransactions as dlt
 
+
+def _resolve_symbol(sym, available_cols, sym_to_ticker=None):
+    """Resolve a broker symbol to a historical data column name."""
+    if sym in available_cols:
+        return sym
+    if sym_to_ticker and sym_to_ticker.get(sym) and sym_to_ticker[sym] in available_cols:
+        return sym_to_ticker[sym]
+    matches = [c for c in available_cols if c.startswith(sym)]
+    return matches[0] if matches else None
+
+
+def _load_symbol_mapping():
+    """Load broker-symbol to Yahoo-ticker mapping from mapping.csv."""
+    try:
+        mapping = pd.read_csv("data/mapping.csv", sep=",")
+        return dict(zip(mapping["symbol"], mapping["ticker"]))
+    except Exception:
+        return {}
+
+
 def _compute_analytics():
     """Compute per-holding analytics and portfolio-level metrics."""
     df = dlp.add_position_pnl_columns()
@@ -30,28 +50,34 @@ def _compute_analytics():
         if "date" in hist.columns:
             hist = hist.set_index("date")
         hist = 10 ** hist
-        daily_returns = hist.pct_change(fill_method=None).dropna()
+        # Consolidate duplicate dates (from outer join of different exchanges)
+        # and forward-fill across exchange holidays
+        hist = hist.groupby(hist.index).first()
+        hist = hist.sort_index().ffill()
 
         # Build portfolio-weighted daily returns using current position weights
-        # Match holding symbols to historical columns (handle exchange suffixes)
+        sym_to_ticker = _load_symbol_mapping()
         holding_weights = {}
         for _, row in df.iterrows():
             sym = row.get("symbol", "")
             w = row.get("weight", 0)
-            if sym in daily_returns.columns:
-                holding_weights[sym] = w
-            else:
-                matches = [c for c in daily_returns.columns if c.startswith(sym)]
-                if matches:
-                    holding_weights[matches[0]] = w
+            col = _resolve_symbol(sym, hist.columns, sym_to_ticker)
+            if col:
+                holding_weights[col] = w
 
         if holding_weights:
             matched_cols = list(holding_weights.keys())
             weights_arr = np.array([holding_weights[c] for c in matched_cols])
-            weights_arr = weights_arr / weights_arr.sum()  # re-normalize to 1
-            portfolio_daily = (daily_returns[matched_cols] * weights_arr).sum(axis=1)
+            weights_arr = weights_arr / weights_arr.sum()
+            subset = hist[matched_cols].dropna()
+            daily_returns = subset.pct_change().iloc[1:]
+            portfolio_daily = (daily_returns * weights_arr).sum(axis=1).dropna()
         else:
-            portfolio_daily = daily_returns.mean(axis=1)
+            daily_returns = hist.pct_change().iloc[1:]
+            portfolio_daily = daily_returns.mean(axis=1).dropna()
+
+        if len(portfolio_daily) < 20:
+            raise ValueError("Not enough return data")
 
         portfolio_return = float(portfolio_daily.mean() * 252)
         portfolio_vol = float(portfolio_daily.std() * np.sqrt(252))
@@ -113,23 +139,14 @@ def _compute_analytics():
         hhi = None
         effective_positions = None
 
-    # --- Dividend Growth Rate (YoY) ---
+    # --- Dividend Growth Rate (completed years: last year vs 2 years ago) ---
     div_growth = None
     try:
         current_year = datetime.today().year
-        # Use abs() since dividends may be stored as negative net_amount
-        div_this_year = abs(dlt.total_transaction_amount(current_year, "Dividend"))
         div_last_year = abs(dlt.total_transaction_amount(current_year - 1, "Dividend"))
-        # Annualize current year dividends if not full year yet
-        today = datetime.today()
-        day_of_year = today.timetuple().tm_yday
-        days_in_year = 366 if (current_year % 4 == 0 and (current_year % 100 != 0 or current_year % 400 == 0)) else 365
-        if day_of_year > 30 and div_this_year > 0:
-            annualized_this_year = div_this_year * (days_in_year / day_of_year)
-        else:
-            annualized_this_year = div_this_year
-        if div_last_year > 0:
-            div_growth = (annualized_this_year / div_last_year - 1) * 100
+        div_2y_ago = abs(dlt.total_transaction_amount(current_year - 2, "Dividend"))
+        if div_2y_ago > 0 and div_last_year > 0:
+            div_growth = (div_last_year / div_2y_ago - 1) * 100
     except Exception:
         div_growth = None
 
@@ -237,16 +254,13 @@ def _build_fee_drag_section(df):
     except Exception:
         return html.Div()
 
-    # Map position symbols to historical columns (handle exchange suffixes)
+    # Map position symbols to historical columns
+    _mapping = _load_symbol_mapping()
     symbol_to_col = {}
     for sym in etfs_with_ter["symbol"].values:
-        if sym in hist.columns:
-            symbol_to_col[sym] = sym
-        else:
-            # Try matching with exchange suffix (e.g. SPICHA → SPICHA.SW)
-            matches = [c for c in hist.columns if c.startswith(sym)]
-            if matches:
-                symbol_to_col[sym] = matches[0]
+        col = _resolve_symbol(sym, hist.columns, _mapping)
+        if col:
+            symbol_to_col[sym] = col
 
     if not symbol_to_col:
         return html.Div()
@@ -789,8 +803,7 @@ def _build_portfolio_vs_cost_basis():
         for _, row in pos_df.iterrows():
             sym = row.get("symbol", "")
             qty = row.get("quantity", 0)
-            col = sym if sym in hist.columns else next(
-                (c for c in hist.columns if c.startswith(sym)), None)
+            col = _resolve_symbol(sym, hist.columns, _load_symbol_mapping())
             if col:
                 holding_values[col] = qty
 
@@ -993,8 +1006,7 @@ def _build_risk_contribution(df):
     for _, row in df.iterrows():
         sym = row.get("symbol", "")
         w = row.get("weight", 0)
-        col = sym if sym in daily_returns.columns else next(
-            (c for c in daily_returns.columns if c.startswith(sym)), None)
+        col = _resolve_symbol(sym, daily_returns.columns, _load_symbol_mapping())
         if col and w > 0:
             holdings.append({"symbol": sym, "col": col, "weight": w})
 
@@ -1142,8 +1154,7 @@ def _build_efficient_frontier(df):
     for _, row in df.iterrows():
         sym = row.get("symbol", "")
         w = row.get("weight", 0)
-        col = sym if sym in daily_returns.columns else next(
-            (c for c in daily_returns.columns if c.startswith(sym)), None)
+        col = _resolve_symbol(sym, daily_returns.columns, _load_symbol_mapping())
         if col and w > 0:
             holdings.append({"symbol": sym, "col": col, "weight": w})
 
