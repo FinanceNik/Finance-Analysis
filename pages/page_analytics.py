@@ -26,38 +26,54 @@ def _compute_analytics():
     drawdown_series = pd.DataFrame()
 
     try:
-        hist = pd.read_csv("data/historical_data.csv")
+        hist = dlp.load_historical_data().reset_index()
         if "date" in hist.columns:
             hist = hist.set_index("date")
         hist = 10 ** hist
-        daily_returns = hist.pct_change().dropna()
+        daily_returns = hist.pct_change(fill_method=None).dropna()
 
-        avg_annual_return = daily_returns.mean() * 252
-        annual_vol = daily_returns.std() * np.sqrt(252)
+        # Build portfolio-weighted daily returns using current position weights
+        # Match holding symbols to historical columns (handle exchange suffixes)
+        holding_weights = {}
+        for _, row in df.iterrows():
+            sym = row.get("symbol", "")
+            w = row.get("weight", 0)
+            if sym in daily_returns.columns:
+                holding_weights[sym] = w
+            else:
+                matches = [c for c in daily_returns.columns if c.startswith(sym)]
+                if matches:
+                    holding_weights[matches[0]] = w
 
-        portfolio_return = avg_annual_return.mean()
-        portfolio_vol = annual_vol.mean()
+        if holding_weights:
+            matched_cols = list(holding_weights.keys())
+            weights_arr = np.array([holding_weights[c] for c in matched_cols])
+            weights_arr = weights_arr / weights_arr.sum()  # re-normalize to 1
+            portfolio_daily = (daily_returns[matched_cols] * weights_arr).sum(axis=1)
+        else:
+            portfolio_daily = daily_returns.mean(axis=1)
+
+        portfolio_return = float(portfolio_daily.mean() * 252)
+        portfolio_vol = float(portfolio_daily.std() * np.sqrt(252))
         portfolio_sharpe = ((portfolio_return - config.RISK_FREE_RATE) / portfolio_vol
                             if portfolio_vol > 0 else None)
 
         # --- Sortino Ratio ---
         try:
-            portfolio_daily = daily_returns.mean(axis=1)
             negative_returns = portfolio_daily[portfolio_daily < 0]
             if len(negative_returns) > 1:
-                downside_deviation = negative_returns.std() * np.sqrt(252)
+                downside_deviation = float(negative_returns.std() * np.sqrt(252))
                 if downside_deviation > 0:
                     sortino_ratio = (portfolio_return - config.RISK_FREE_RATE) / downside_deviation
         except Exception:
             sortino_ratio = None
 
-        # --- Max Drawdown from portfolio average ---
+        # --- Max Drawdown from portfolio-weighted cumulative return ---
         try:
-            portfolio_avg = hist.mean(axis=1).dropna()
-            running_max = portfolio_avg.cummax()
-            drawdown = (portfolio_avg - running_max) / running_max
-            max_drawdown = drawdown.min()
-            # Build drawdown series for chart
+            cumulative = (1 + portfolio_daily).cumprod()
+            running_max = cumulative.cummax()
+            drawdown = (cumulative - running_max) / running_max
+            max_drawdown = float(drawdown.min())
             drawdown_series = pd.DataFrame({
                 "date": drawdown.index,
                 "drawdown": (drawdown * 100).values,
@@ -204,7 +220,7 @@ def _build_fee_drag_section(df):
 
     # ── Load historical price data ──
     try:
-        hist = pd.read_csv("data/historical_data.csv")
+        hist = dlp.load_historical_data().reset_index()
         if "date" in hist.columns:
             hist = hist.set_index("date")
         hist = 10 ** hist  # convert from log scale
@@ -414,7 +430,7 @@ def _build_currency_impact(df):
 def _build_benchmark_section():
     """Build benchmark comparison chart with SPY/MSCI World overlays."""
     try:
-        hist = pd.read_csv("data/historical_data.csv")
+        hist = dlp.load_historical_data().reset_index()
         if "date" in hist.columns:
             hist = hist.set_index("date")
         hist = 10 ** hist
@@ -549,11 +565,11 @@ def _build_drawdown_chart(drawdown_series):
 def _build_correlation_heatmap():
     """Build a correlation matrix heatmap from historical returns."""
     try:
-        hist = pd.read_csv("data/historical_data.csv")
+        hist = dlp.load_historical_data().reset_index()
         if "date" in hist.columns:
             hist = hist.set_index("date")
         hist = 10 ** hist
-        daily_returns = hist.pct_change().dropna()
+        daily_returns = hist.pct_change(fill_method=None).dropna()
         corr = daily_returns.corr()
     except Exception:
         return html.Div()
@@ -664,6 +680,7 @@ def layout():
         Styles.kpiboxes('Est. Annual Return', metrics.get("annual_return", "N/A"), Styles.colorPalette[1]),
         Styles.kpiboxes('Est. Annual Vol', metrics.get("annual_vol", "N/A"), Styles.colorPalette[2]),
         Styles.kpiboxes('Total Market Value', f"{metrics.get('total_mv', 0):,}", Styles.colorPalette[3]),
+        Styles.kpiboxes('Risk-Free Rate', f"{config.RISK_FREE_RATE:.1%}", Styles.colorPalette[1]),
     ], className="kpi-row")
 
     # --- KPI row 2 (advanced metrics) ---
