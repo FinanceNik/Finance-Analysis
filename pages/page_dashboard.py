@@ -7,6 +7,15 @@ import dataLoadPositions as dlp
 import dataLoadTransactions as dlt
 import user_settings
 
+
+def _load_symbol_mapping():
+    """Load broker-symbol to Yahoo-ticker mapping from mapping.csv."""
+    try:
+        mapping = pd.read_csv("data/mapping.csv", sep=",")
+        return dict(zip(mapping["symbol"], mapping["ticker"]))
+    except Exception:
+        return {}
+
 def _fmt_currency(value):
     """Format a numeric value as a readable currency string."""
     if value is None:
@@ -232,19 +241,30 @@ def _build_performance_chart():
 
     # Apply 10**values transform (data is stored in log scale)
     if "date" in hist.columns:
-        dates = hist["date"].tolist()
         data_cols = [c for c in hist.columns if c != "date"]
     else:
-        dates = hist.index.tolist()
         data_cols = list(hist.columns)
+
+    # Transform from log scale to actual values
+    price_data = hist[data_cols].apply(lambda col: 10 ** col)
+
+    # Consolidate duplicate dates from outer-joined exchanges
+    if "date" in hist.columns:
+        price_data.index = hist["date"]
+        price_data = price_data.groupby(price_data.index).first()
+        price_data = price_data.sort_index().ffill()
+        dates = price_data.index.tolist()
+    else:
+        dates = hist.index.tolist()
+
+    # Build symbol mapping: broker symbol -> Yahoo ticker and reverse
+    sym_to_ticker = _load_symbol_mapping()
+    ticker_to_sym = {v: k for k, v in sym_to_ticker.items() if v}
 
     # Separate benchmark columns from portfolio holdings
     bench_tickers = config.BENCHMARK_TICKERS
     holding_cols = [c for c in data_cols if c not in bench_tickers]
     bench_cols = [c for c in bench_tickers if c in data_cols]
-
-    # Transform from log scale to actual values
-    price_data = hist[data_cols].apply(lambda col: 10 ** col)
 
     # Normalize to 100 at the first valid value for each series
     first_valid = price_data.apply(lambda s: s.dropna().iloc[0] if not s.dropna().empty else np.nan)
@@ -271,7 +291,7 @@ def _build_performance_chart():
         series = normalized[col].dropna()
         if not series.empty:
             label = config.BENCHMARK_NAMES.get(col, col)
-            x_vals = [dates[j] for j in series.index] if "date" in hist.columns else series.index.tolist()
+            x_vals = [dates[j] for j in series.index] if isinstance(series.index[0], int) else series.index.tolist()
             traces.append({
                 'x': x_vals,
                 'y': series.round(2).tolist(),
@@ -286,13 +306,14 @@ def _build_performance_chart():
     for col in holding_cols:
         series = normalized[col].dropna()
         if not series.empty:
-            x_vals = [dates[j] for j in series.index] if "date" in hist.columns else series.index.tolist()
+            x_vals = [dates[j] for j in series.index] if isinstance(series.index[0], int) else series.index.tolist()
+            display_name = ticker_to_sym.get(col, col)
             traces.append({
                 'x': x_vals,
                 'y': series.round(2).tolist(),
                 'type': 'scatter',
                 'mode': 'lines',
-                'name': col,
+                'name': display_name,
                 'line': {'width': 1},
                 'opacity': 0.35,
             })
@@ -310,7 +331,7 @@ def _build_performance_chart():
     }
 
 def _get_portfolio_sparkline():
-    """Get last 12 data points from historical data for a portfolio sparkline."""
+    """Get last 30 data points from historical data for a portfolio sparkline."""
     try:
         hist = dlp.load_historical_data()
         if hist.empty:
@@ -318,6 +339,11 @@ def _get_portfolio_sparkline():
         hist = hist.reset_index()
         data_cols = [c for c in hist.columns if c != "date"]
         prices = hist[data_cols].apply(lambda col: 10 ** col)
+        # Consolidate duplicate dates from outer-joined exchanges
+        if "date" in hist.columns:
+            prices.index = hist["date"]
+            prices = prices.groupby(prices.index).first()
+            prices = prices.sort_index().ffill()
         avg = prices.mean(axis=1).dropna()
         points = avg.tail(30).tolist()
         return points if len(points) >= 2 else None

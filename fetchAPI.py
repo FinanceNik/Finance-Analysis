@@ -55,6 +55,11 @@ def fetch_historical_data_yfinance():
         logger.warning("No historical data fetched for any ticker.")
         return
 
+    # Consolidate duplicate dates from different exchanges (outer join creates
+    # multiple rows per date when exchanges have different trading calendars)
+    combined_df = combined_df.groupby(combined_df.index).first()
+    combined_df = combined_df.sort_index()
+
     combined_df_log = np.log10(combined_df + 1e-9)  # Add small value to avoid log(0)
     combined_df_log.index = combined_df_log.index.strftime("%Y-%m-%d")
     combined_df_log.index.name = "date"
