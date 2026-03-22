@@ -446,8 +446,6 @@ def _build_symbol_table(dividends):
             style_table={"overflowX": "auto", "overflowY": "auto", "maxHeight": "500px"},
             style_cell={"padding": "8px", "textAlign": "left", "fontSize": "13px"},
             style_header={
-                "backgroundColor": Styles.colorPalette[0],
-                "color": "white",
                 "fontWeight": "bold",
                 "fontSize": "13px",
                 "fontFamily": Styles.GRAPH_LAYOUT["font"]["family"],

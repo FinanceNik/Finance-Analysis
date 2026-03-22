@@ -95,8 +95,12 @@ def skeleton_table(rows=5):
 
 
 def _format_kpi_value(value):
-    """Format numeric KPI values with thousands separators and 2 decimals."""
-    if isinstance(value, (int, float)):
+    """Format numeric KPI values with thousands separators; integers without decimals."""
+    if isinstance(value, int):
+        return f"{value:,}"
+    if isinstance(value, float):
+        if value == int(value):
+            return f"{int(value):,}"
         return f"{value:,.2f}"
     return str(value)
 
@@ -105,8 +109,11 @@ def kpiboxes(label_text, value, color):
     return html.Div(
         html.Div([
             html.Div(label_text, className="kpi-label"),
-            html.Div(_format_kpi_value(value), className="kpi-value"),
-        ], className="kpi-inner", style={"backgroundColor": color}),
+            html.Div(_format_kpi_value(value), className="kpi-value",
+                     style={"color": color}),
+        ], className="kpi-inner",
+           style={"borderLeft": f"4px solid {color}",
+                  "backgroundColor": "var(--bg-card)"}),
         className="kpi-box",
     )
 
@@ -139,9 +146,12 @@ def kpiboxes_spark(label_text, value, color, data_points=None):
     return html.Div(
         html.Div([
             html.Div(label_text, className="kpi-label"),
-            html.Div(_format_kpi_value(value), className="kpi-value"),
+            html.Div(_format_kpi_value(value), className="kpi-value",
+                     style={"color": color}),
             spark,
-        ], className="kpi-inner", style={"backgroundColor": color}),
+        ], className="kpi-inner",
+           style={"borderLeft": f"4px solid {color}",
+                  "backgroundColor": "var(--bg-card)"}),
         className="kpi-box",
     )
 
@@ -168,8 +178,11 @@ def kpiboxes_ref(label_text, value, color, ref_label="", ref_pct=None):
     return html.Div(
         html.Div([
             html.Div(label_text, className="kpi-label"),
-            html.Div(_format_kpi_value(value), className="kpi-value"),
+            html.Div(_format_kpi_value(value), className="kpi-value",
+                     style={"color": color}),
             ref_line,
-        ], className="kpi-inner", style={"backgroundColor": color}),
+        ], className="kpi-inner",
+           style={"borderLeft": f"4px solid {color}",
+                  "backgroundColor": "var(--bg-card)"}),
         className="kpi-box",
     )

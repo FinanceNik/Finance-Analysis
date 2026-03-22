@@ -159,8 +159,6 @@ def layout():
         style_table={"overflowX": "auto"},
         style_cell={"padding": "8px", "textAlign": "left", "fontSize": "14px"},
         style_header={
-            "backgroundColor": Styles.colorPalette[0],
-            "color": "white",
             "fontWeight": "bold",
             "fontSize": "14px",
             "fontFamily": Styles.GRAPH_LAYOUT["font"]["family"],

@@ -115,8 +115,7 @@ def layout():
         page_size=25,
         style_table={"overflowX": "auto"},
         style_cell={"padding": "8px", "textAlign": "left", "fontSize": "13px"},
-        style_header={"backgroundColor": Styles.colorPalette[0], "color": "white",
-                       "fontWeight": "bold", "fontSize": "13px",
+        style_header={"fontWeight": "bold", "fontSize": "13px",
                        "fontFamily": Styles.GRAPH_LAYOUT['font']['family']},
         style_data_conditional=[
             {"if": {"filter_query": "{gain_loss} > 0", "column_id": "gain_loss"},

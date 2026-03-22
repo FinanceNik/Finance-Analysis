@@ -125,6 +125,7 @@ sidebar = html.Div(
 
 top_header = html.Div([
     html.Div([
+        html.Button("\u2630", id="hamburger-btn", className="hamburger-btn"),
         html.Span(id="breadcrumb", className="breadcrumb-text"),
     ], className="top-header-left"),
     html.Div([
@@ -326,6 +327,20 @@ app.clientside_callback(
     """,
     Output("export-pdf-btn", "title"),
     [Input("export-pdf-btn", "n_clicks")],
+    prevent_initial_call=True
+)
+
+
+# --- Hamburger sidebar toggle (responsive) ---
+app.clientside_callback(
+    """
+    function(n) {
+        if (n) { document.body.classList.toggle('sidebar-open'); }
+        return dash_clientside.no_update;
+    }
+    """,
+    Output("hamburger-btn", "className"),
+    Input("hamburger-btn", "n_clicks"),
     prevent_initial_call=True
 )
 

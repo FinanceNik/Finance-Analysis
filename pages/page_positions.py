@@ -36,8 +36,7 @@ def _build_holdings_table(df):
         export_headers="display",
         style_table={"overflowX": "auto", "overflowY": "auto", "maxHeight": "600px"},
         style_cell={"padding": "8px", "textAlign": "left", "fontSize": "14px"},
-        style_header={"backgroundColor": Styles.colorPalette[0], "color": "white",
-                       "fontWeight": "bold", "fontSize": "14px",
+        style_header={"fontWeight": "bold", "fontSize": "14px",
                        "fontFamily": Styles.GRAPH_LAYOUT['font']['family']},
         style_data_conditional=[
             {"if": {"row_index": "odd"}, "backgroundColor": "var(--table-stripe, #f9f9f9)"},

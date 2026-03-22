@@ -37,7 +37,7 @@ def _build_allocation_donut():
         return {
             'data': [],
             'layout': Styles.graph_layout(
-                title='Portfolio Allocation',
+                title='',
                 annotations=[{
                     'text': 'No data', 'showarrow': False,
                     'font': {'size': 14}
@@ -56,7 +56,7 @@ def _build_allocation_donut():
             'marker': {'colors': Styles.purple_list[:len(alloc)]},
         }],
         'layout': Styles.graph_layout(
-            title='Portfolio Allocation',
+            title='',
             showlegend=False,
             margin={'t': 40, 'b': 20, 'l': 20, 'r': 20},
         ),
@@ -73,7 +73,7 @@ def _build_dividend_sparkline():
         return {
             'data': [],
             'layout': Styles.graph_layout(
-                title='Monthly Dividends',
+                title='',
                 annotations=[{
                     'text': 'No data', 'showarrow': False,
                     'font': {'size': 14}
@@ -103,7 +103,7 @@ def _build_dividend_sparkline():
             },
         ],
         'layout': Styles.graph_layout(
-            title='Monthly Dividends',
+            title='',
             barmode='group',
             showlegend=True,
             legend={'orientation': 'h', 'y': -0.15, 'x': 0.5, 'xanchor': 'center'},
@@ -120,7 +120,7 @@ def _build_top_movers():
         return {
             'data': [],
             'layout': Styles.graph_layout(
-                title='Top Movers',
+                title='',
                 annotations=[{
                     'text': 'No data', 'showarrow': False,
                     'font': {'size': 14}
@@ -154,7 +154,7 @@ def _build_top_movers():
             'textposition': 'outside',
         }],
         'layout': Styles.graph_layout(
-            title='Top Movers (Unrealized P&L)',
+            title='',
             margin={'t': 40, 'b': 30, 'l': 100, 'r': 60},
             xaxis={'title': ''},
             yaxis={'title': ''},
@@ -222,7 +222,7 @@ def _build_performance_chart():
         return {
             'data': [],
             'layout': Styles.graph_layout(
-                title='Performance Overview',
+                title='',
                 annotations=[{
                     'text': 'No historical data available',
                     'showarrow': False, 'font': {'size': 14}
@@ -236,7 +236,7 @@ def _build_performance_chart():
     if hist.empty:
         return {
             'data': [],
-            'layout': Styles.graph_layout(title='Performance Overview'),
+            'layout': Styles.graph_layout(title=''),
         }
 
     # Apply 10**values transform (data is stored in log scale)
@@ -321,7 +321,7 @@ def _build_performance_chart():
     return {
         'data': traces,
         'layout': Styles.graph_layout(
-            title='Portfolio vs Benchmarks (Normalized to 100)',
+            title='',
             xaxis={'title': 'Date', 'type': 'date' if 'date' in hist.columns else 'linear'},
             yaxis={'title': 'Indexed Value'},
             hovermode='x unified',
@@ -405,6 +405,7 @@ def layout():
             # ── Row 2: Allocation donut + Dividend sparkline ──
             html.Div([
                 html.Div([
+                    html.H5("Portfolio Allocation"),
                     dcc.Graph(
                         id='dash-allocation-donut',
                         figure=_build_allocation_donut(),
@@ -412,6 +413,7 @@ def layout():
                     ),
                 ], className="card"),
                 html.Div([
+                    html.H5("Monthly Dividends"),
                     dcc.Graph(
                         id='dash-dividend-sparkline',
                         figure=_build_dividend_sparkline(),
@@ -423,6 +425,7 @@ def layout():
             # ── Row 3: Top Movers + FIRE Progress ──
             html.Div([
                 html.Div([
+                    html.H5("Top Movers (Unrealized P&L)"),
                     dcc.Graph(
                         id='dash-top-movers',
                         figure=_build_top_movers(),
@@ -436,6 +439,7 @@ def layout():
 
             # ── Row 4: Performance Overview (full width) ──
             html.Div([
+                html.H5("Portfolio vs Benchmarks (Normalized to 100)"),
                 dcc.Graph(
                     id='dash-performance-chart',
                     figure=_build_performance_chart(),
