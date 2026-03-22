@@ -11,8 +11,9 @@ from pages import (page_positions, page_transactions, page_about,  # noqa: E501
                    page_projections, page_realEstate, page_analytics,
                    page_networth, page_goals, page_rebalancing,
                    page_budget, page_dashboard, page_scenarios, page_income,
-                   page_dividends, page_macro, page_backtest, page_currency,
-                   page_alerts, page_taxloss, page_snapshots)
+                   page_dividends, page_drip, page_macro, page_backtest,
+                   page_currency, page_alerts, page_taxloss, page_snapshots,
+                   page_sizing, page_whatif)
 import fetchAPI
 import dataLoadMacro as dlm
 import backtestEngine as bte
@@ -37,6 +38,7 @@ PAGE_MAP = {
     "/budget": ("Income", "Budget"),
     "/income-statement": ("Income", "Income Statement"),
     "/dividends": ("Income", "Dividends"),
+    "/drip": ("Income", "DRIP Simulator"),
     "/projections": ("Planning", "Projections"),
     "/scenarios": ("Planning", "Scenarios"),
     "/real-estate": ("Planning", "Real Estate"),
@@ -46,6 +48,8 @@ PAGE_MAP = {
     "/alerts": ("Overview", "Alerts"),
     "/snapshots": ("Overview", "Snapshots"),
     "/tax-loss": ("Portfolio", "Tax-Loss Harvesting"),
+    "/sizing": ("Portfolio", "Position Sizing"),
+    "/what-if": ("Portfolio", "What-If Simulator"),
     "/about": ("", "About"),
 }
 
@@ -57,6 +61,7 @@ _ICONS = {
     "Transactions": "\u21C4", "Rebalancing": "\u2696", "Currency Exposure": "\u25CB",
     "Budget": "\u2610", "Income Statement": "\u2261",
     "Dividends": "\u2756",
+    "DRIP Simulator": "\u21BB",
     "Projections": "\u25D0", "Scenarios": "\u26A1",
     "Real Estate": "\u2302", "Goals": "\u25C9",
     "Macro Dashboard": "\u25C9",
@@ -64,6 +69,8 @@ _ICONS = {
     "Alerts": "\u25B2",
     "Snapshots": "\u25C9",
     "Tax-Loss Harvesting": "\u2702",
+    "Position Sizing": "\u229E",
+    "What-If Simulator": "\u21C4",
     "About": "\u24D8",
 }
 
@@ -109,11 +116,14 @@ sidebar = html.Div(
             _nav_link("Rebalancing", f"{basePath}/rebalancing"),
             _nav_link("Currency Exposure", f"{basePath}/currency"),
             _nav_link("Tax-Loss Harvesting", f"{basePath}/tax-loss"),
+            _nav_link("Position Sizing", f"{basePath}/sizing"),
+            _nav_link("What-If Simulator", f"{basePath}/what-if"),
         ], "portfolio"),
         _nav_section("Income", [
             _nav_link("Budget", f"{basePath}/budget"),
             _nav_link("Income Statement", f"{basePath}/income-statement"),
             _nav_link("Dividends", f"{basePath}/dividends"),
+            _nav_link("DRIP Simulator", f"{basePath}/drip"),
         ], "income"),
         _nav_section("Planning", [
             _nav_link("Projections", f"{basePath}/projections"),
@@ -243,8 +253,8 @@ app.clientside_callback(
         var paths = {
             'overview': ['/', '/net-worth', '/alerts', '/snapshots'],
             'portfolio': ['/positions', '/analytics', '/transactions',
-                          '/rebalancing', '/currency', '/tax-loss'],
-            'income': ['/budget', '/income-statement', '/dividends'],
+                          '/rebalancing', '/currency', '/tax-loss', '/sizing', '/what-if'],
+            'income': ['/budget', '/income-statement', '/dividends', '/drip'],
             'planning': ['/projections', '/scenarios', '/real-estate', '/goals'],
             'macro': ['/macro', '/backtest'],
         };
@@ -384,6 +394,8 @@ def render_page_content(pathname):
         return page_income.layout()
     elif pathname == f"{basePath}/dividends":
         return page_dividends.layout()
+    elif pathname == f"{basePath}/drip":
+        return page_drip.layout()
     elif pathname == f"{basePath}/macro":
         return page_macro.layout()
     elif pathname == f"{basePath}/backtest":
@@ -396,6 +408,10 @@ def render_page_content(pathname):
         return page_alerts.layout()
     elif pathname == f"{basePath}/snapshots":
         return page_snapshots.layout()
+    elif pathname == f"{basePath}/sizing":
+        return page_sizing.layout()
+    elif pathname == f"{basePath}/what-if":
+        return page_whatif.layout()
     elif pathname == f"{basePath}/about":
         return page_about.layout()
 
@@ -410,11 +426,14 @@ page_rebalancing.register_callbacks(app)
 page_budget.register_callbacks(app)
 page_scenarios.register_callbacks(app)
 page_dividends.register_callbacks(app)
+page_drip.register_callbacks(app)
 page_macro.register_callbacks(app)
 page_backtest.register_callbacks(app)
 page_alerts.register_callbacks(app)
 page_taxloss.register_callbacks(app)
 page_snapshots.register_callbacks(app)
+page_sizing.register_callbacks(app)
+page_whatif.register_callbacks(app)
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=8080, debug=False)
