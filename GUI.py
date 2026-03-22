@@ -11,7 +11,8 @@ from pages import (page_positions, page_transactions, page_about,  # noqa: E501
                    page_projections, page_realEstate, page_analytics,
                    page_networth, page_goals, page_rebalancing,
                    page_budget, page_dashboard, page_scenarios, page_income,
-                   page_dividends, page_macro, page_backtest, page_currency)
+                   page_dividends, page_macro, page_backtest, page_currency,
+                   page_alerts, page_taxloss, page_snapshots)
 import fetchAPI
 import dataLoadMacro as dlm
 import backtestEngine as bte
@@ -42,6 +43,9 @@ PAGE_MAP = {
     "/goals": ("Planning", "Goals"),
     "/macro": ("Macro", "Macro Dashboard"),
     "/backtest": ("Macro", "Strategy Backtest"),
+    "/alerts": ("Overview", "Alerts"),
+    "/snapshots": ("Overview", "Snapshots"),
+    "/tax-loss": ("Portfolio", "Tax-Loss Harvesting"),
     "/about": ("", "About"),
 }
 
@@ -57,6 +61,9 @@ _ICONS = {
     "Real Estate": "\u2302", "Goals": "\u25C9",
     "Macro Dashboard": "\u25C9",
     "Strategy Backtest": "\u25B7",
+    "Alerts": "\u25B2",
+    "Snapshots": "\u25C9",
+    "Tax-Loss Harvesting": "\u2702",
     "About": "\u24D8",
 }
 
@@ -92,6 +99,8 @@ sidebar = html.Div(
         _nav_section("Overview", [
             _nav_link("Dashboard", f"{basePath}/"),
             _nav_link("Net Worth", f"{basePath}/net-worth"),
+            _nav_link("Alerts", f"{basePath}/alerts"),
+            _nav_link("Snapshots", f"{basePath}/snapshots"),
         ], "overview"),
         _nav_section("Portfolio", [
             _nav_link("Positions", f"{basePath}/positions"),
@@ -99,6 +108,7 @@ sidebar = html.Div(
             _nav_link("Transactions", f"{basePath}/transactions"),
             _nav_link("Rebalancing", f"{basePath}/rebalancing"),
             _nav_link("Currency Exposure", f"{basePath}/currency"),
+            _nav_link("Tax-Loss Harvesting", f"{basePath}/tax-loss"),
         ], "portfolio"),
         _nav_section("Income", [
             _nav_link("Budget", f"{basePath}/budget"),
@@ -231,9 +241,9 @@ app.clientside_callback(
     function(pathname, n1, n2, n3, n4, n5) {
         var sections = ['overview', 'portfolio', 'income', 'planning', 'macro'];
         var paths = {
-            'overview': ['/', '/net-worth'],
+            'overview': ['/', '/net-worth', '/alerts', '/snapshots'],
             'portfolio': ['/positions', '/analytics', '/transactions',
-                          '/rebalancing', '/currency'],
+                          '/rebalancing', '/currency', '/tax-loss'],
             'income': ['/budget', '/income-statement', '/dividends'],
             'planning': ['/projections', '/scenarios', '/real-estate', '/goals'],
             'macro': ['/macro', '/backtest'],
@@ -380,6 +390,12 @@ def render_page_content(pathname):
         return page_backtest.layout()
     elif pathname == f"{basePath}/currency":
         return page_currency.layout()
+    elif pathname == f"{basePath}/tax-loss":
+        return page_taxloss.layout()
+    elif pathname == f"{basePath}/alerts":
+        return page_alerts.layout()
+    elif pathname == f"{basePath}/snapshots":
+        return page_snapshots.layout()
     elif pathname == f"{basePath}/about":
         return page_about.layout()
 
@@ -396,6 +412,9 @@ page_scenarios.register_callbacks(app)
 page_dividends.register_callbacks(app)
 page_macro.register_callbacks(app)
 page_backtest.register_callbacks(app)
+page_alerts.register_callbacks(app)
+page_taxloss.register_callbacks(app)
+page_snapshots.register_callbacks(app)
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=8080, debug=False)
