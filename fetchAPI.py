@@ -1,7 +1,6 @@
 import logging
 import pandas as pd
 import yfinance as yf
-from time import sleep
 import numpy as np
 import config
 
@@ -31,7 +30,6 @@ def fetch_historical_data_yfinance():
             else:
                 combined_df = combined_df.join(close_df, how='outer')
 
-            sleep(0)
         except Exception as e:
             logger.warning("Failed to fetch data for %s: %s", ticker_symbol, e)
 
@@ -50,7 +48,6 @@ def fetch_historical_data_yfinance():
             else:
                 combined_df = combined_df.join(close_df, how='outer')
 
-            sleep(0)
         except Exception as e:
             logger.warning("Failed to fetch benchmark data for %s: %s", bench_ticker, e)
 

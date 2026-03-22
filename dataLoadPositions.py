@@ -5,6 +5,7 @@ import glob
 import pandas as pd
 from datetime import datetime
 from functools import lru_cache
+from utils import standardize_columns
 
 logger = logging.getLogger(__name__)
 
@@ -62,19 +63,19 @@ def set_positions_filepath(path: str):
     global _positions_filepath
     _positions_filepath = path
     fetch_data.cache_clear()
+    load_historical_data.cache_clear()
+
+
+@lru_cache(maxsize=1)
+def load_historical_data() -> pd.DataFrame:
+    path = "data/historical_data.csv"
+    if not os.path.exists(path):
+        return pd.DataFrame()
+    return pd.read_csv(path, index_col=0, parse_dates=True)
 
 
 def _standardize_columns(df: pd.DataFrame) -> pd.DataFrame:
-    df.columns = (
-        df.columns
-        .str.strip()
-        .str.lower()
-        .str.replace(" ", "_")
-        .str.replace("-", "_")
-        .str.replace("#", "number")
-        .str.replace("__", "_")
-    )
-    return df
+    return standardize_columns(df)
 
 
 def _parse_xls_positions(filepath: str) -> pd.DataFrame:

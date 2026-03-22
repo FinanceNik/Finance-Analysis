@@ -4,6 +4,7 @@ import logging
 import pandas as pd
 from datetime import datetime
 from functools import lru_cache
+from utils import standardize_columns
 
 logger = logging.getLogger(__name__)
 
@@ -35,15 +36,7 @@ def ingest_transactions() -> pd.DataFrame:
         return pd.DataFrame()
 
     df = pd.read_csv(_transactions_filepath, sep=";", encoding="latin-1")
-    df.columns = (
-        df.columns
-        .str.strip()
-        .str.lower()
-        .str.replace(" ", "_")
-        .str.replace("-", "_")
-        .str.replace("#", "number")
-        .str.replace("__", "_")
-    )
+    df = standardize_columns(df)
 
     if "date" in df.columns:
         df["date"] = pd.to_datetime(df["date"], dayfirst=True)
@@ -182,6 +175,30 @@ def monthly_totals(transaction_type):
     vals_current = [dict_current.get(m, 0) for m in months]
 
     return months, vals_2y, vals_prev, vals_current
+
+
+def net_contributions_monthly(year: int) -> dict[str, float]:
+    """Net contributions per month: buys netted with sells.
+
+    Returns dict of month abbreviation -> net amount (positive = net invested).
+    Crypto Deposits are excluded (staking rewards with no cash amount).
+    """
+    df = ingest_transactions()
+    if df.empty:
+        return {m: 0 for m in months}
+
+    df = df.loc[df['date'].dt.year == year].copy()
+    contrib_types = ["buy", "sell"]
+    df = df.loc[df['transaction'].str.lower().isin(contrib_types)]
+    df["month"] = df["date"].dt.strftime("%b")
+    # net_amount is negative for buys, positive for sells; negate so buying is positive
+    grouped = df.groupby("month")["net_amount"].sum()
+    return {m: round(-grouped.get(m, 0), 2) for m in months}
+
+
+def net_contributions_yearly(year: int) -> float:
+    """Total net contributions for a year (positive = net invested)."""
+    return round(sum(net_contributions_monthly(year).values()), 2)
 
 
 def totals(transaction_type):

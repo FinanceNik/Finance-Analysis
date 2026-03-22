@@ -1,4 +1,4 @@
-from dash import html
+from dash import dcc, html
 
 # ── Color palette ──
 greys = ['#2b2b2b', '#3b3b3b', '#cfcfcf', '#f0f0f0']
@@ -59,26 +59,6 @@ CONTENT_STYLE = {
 }
 
 CONTENT_STYLE_DARK = {**CONTENT_STYLE}
-
-
-# ── Card wrapper ──
-def STYLE(width):
-    """Deprecated: use CSS grid classes (.grid-2, .grid-3) instead."""
-    return {
-        'width': f'{width}%',
-        'display': 'inline-block',
-        'verticalAlign': 'top',
-        'padding': '16px',
-    }
-
-
-def FILLER():
-    """Deprecated: remove FILLER() calls, use CSS grid instead."""
-    return {
-        'width': '2%',
-        'display': 'inline-block',
-        'padding': '5px',
-    }
 
 
 # ── KPI boxes (clean HTML, no DataTable hack) ──
@@ -143,7 +123,6 @@ def kpiboxes_spark(label_text, value, color, data_points=None):
                 pts.append(f"{x},{y}")
             polyline = f'<polyline points="{" ".join(pts)}" fill="none" stroke="rgba(255,255,255,0.6)" stroke-width="1.5" />'
             svg = f'<svg viewBox="0 0 {w} {h}" style="width:80px;height:24px;margin-top:4px;">{polyline}</svg>'
-            from dash import dcc
             spark = dcc.Markdown(
                 f'<div style="margin-top:4px">{svg}</div>',
                 dangerously_allow_html=True,

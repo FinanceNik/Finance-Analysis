@@ -5,6 +5,11 @@ DATA_DIR = "data"
 # Risk-free rate for Sharpe ratio calculation
 RISK_FREE_RATE = 0.02
 
+# FIRE (Financial Independence) parameters
+FIRE_WITHDRAWAL_RATE = 0.04
+FIRE_GROWTH_RATE = 0.07
+MAX_FIRE_YEARS = 200
+
 # Expected annual portfolio return (used for fee drag projections)
 EXPECTED_RETURN = 0.08
 
@@ -56,7 +61,7 @@ DEFAULT_TARGET_ALLOCATION = {
 MACRO_TICKERS = {
     # Market Sentiment & Volatility
     "vix": "^VIX",
-    "put_call": "^PCCE",
+    "put_call": "^VIX9D",  # CBOE 9-day VIX (fear proxy; ^PCCE delisted)
     "hyg": "HYG",
     "tlt": "TLT",
     # Rates & Yields

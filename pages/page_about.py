@@ -1,6 +1,6 @@
 from dash import html
 
-def render_page_content():
+def layout():
     return html.Div([
         html.Div([html.H1('About This Finance Dashboard')], style={"textAlign": "left"}),
         html.H2('Your Personal Wealth Analysis Tool'),

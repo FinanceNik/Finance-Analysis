@@ -335,7 +335,7 @@ def render_page_content(pathname):
     elif pathname == f"{basePath}/positions":
         return page_positions.layout()
     elif pathname == f"{basePath}/transactions":
-        return page_transactions.render_page_content()
+        return page_transactions.layout()
     elif pathname == f"{basePath}/projections":
         return page_projections.layout()
     elif pathname == f"{basePath}/real-estate":
@@ -361,7 +361,7 @@ def render_page_content(pathname):
     elif pathname == f"{basePath}/backtest":
         return page_backtest.layout()
     elif pathname == f"{basePath}/about":
-        return page_about.render_page_content()
+        return page_about.layout()
 
 
 # --- Register callbacks from pages ---
@@ -378,4 +378,4 @@ page_macro.register_callbacks(app)
 page_backtest.register_callbacks(app)
 
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=8080, debug=True)
+    app.run(host='0.0.0.0', port=8080, debug=False)

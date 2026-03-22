@@ -1,6 +1,7 @@
 import math
 from dash import dcc, html, Input, Output
 import Styles
+import config
 import dataLoadPositions as dlp
 import user_settings
 
@@ -10,7 +11,7 @@ def _hex_to_rgba(hex_color, alpha):
     r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
     return f"rgba({r},{g},{b},{alpha})"
 
-def _calc_years_to_fire(portfolio, annual_savings, fire_number, growth_rate=0.07):
+def _calc_years_to_fire(portfolio, annual_savings, fire_number, growth_rate=config.FIRE_GROWTH_RATE):
     """Calculate years to reach FIRE number with contributions and compound growth."""
     if fire_number <= 0 or portfolio >= fire_number:
         return 0
@@ -19,7 +20,7 @@ def _calc_years_to_fire(portfolio, annual_savings, fire_number, growth_rate=0.07
     if growth_rate <= 0:
         return (fire_number - portfolio) / annual_savings if annual_savings > 0 else float('inf')
     current = portfolio
-    for year in range(1, 200):
+    for year in range(1, config.MAX_FIRE_YEARS):
         current = current * (1 + growth_rate) + annual_savings
         if current >= fire_number:
             return year
@@ -123,7 +124,7 @@ def register_callbacks(app):
         savings_rate = (monthly_savings / total_income * 100) if total_income > 0 else 0
 
         annual_expenses = total_expenses * 12
-        fire_number = annual_expenses / 0.04 if annual_expenses > 0 else 0
+        fire_number = annual_expenses / config.FIRE_WITHDRAWAL_RATE if annual_expenses > 0 else 0
         portfolio = dlp.portfolio_total_value()
         fire_progress = (portfolio / fire_number * 100) if fire_number > 0 else 0
         annual_savings = monthly_savings * 12
@@ -190,7 +191,7 @@ def register_callbacks(app):
             Styles.kpiboxes("FIRE Progress", f"{fire_progress:.1f}%",
                             Styles.strongGreen if fire_progress >= 100 else Styles.colorPalette[2]),
             Styles.kpiboxes("Years to FIRE",
-                            f"{years_to_fire:.1f}" if years_to_fire < 200 else "N/A",
+                            f"{years_to_fire:.1f}" if years_to_fire < config.MAX_FIRE_YEARS else "N/A",
                             Styles.colorPalette[3]),
         ], className="kpi-row")
 
@@ -313,7 +314,7 @@ def _build_sankey(incomes, expenses, savings):
         )
     }
 
-def _build_fire_projection(portfolio, annual_savings, fire_number, growth_rate=0.07):
+def _build_fire_projection(portfolio, annual_savings, fire_number, growth_rate=config.FIRE_GROWTH_RATE):
     """Build a projection chart showing portfolio growth toward FIRE number."""
     years = list(range(0, 31))
     values = []

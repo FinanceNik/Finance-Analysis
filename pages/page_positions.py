@@ -227,10 +227,10 @@ def register_callbacks(app):
         [Input("url", "pathname")]
     )
     def update_historical_chart(_):
-        try:
-            df = pd.read_csv("data/historical_data.csv")
-        except FileNotFoundError:
+        df = dlp.load_historical_data()
+        if df.empty:
             return {'data': [], 'layout': Styles.graph_layout(title='No historical data available')}
+        df = df.reset_index()
 
         # Use date column if present, otherwise fall back to index
         x_values = df["date"].tolist() if "date" in df.columns else df.index.tolist()

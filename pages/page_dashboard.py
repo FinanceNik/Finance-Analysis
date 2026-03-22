@@ -160,7 +160,7 @@ def _build_fire_progress():
     monthly_expenses = sum(v for v in exp.values() if isinstance(v, (int, float)))
     annual_expenses = monthly_expenses * 12
 
-    fire_number = annual_expenses / 0.04 if annual_expenses > 0 else 0
+    fire_number = annual_expenses / config.FIRE_WITHDRAWAL_RATE if annual_expenses > 0 else 0
     portfolio = dlp.portfolio_total_value()
     progress = _safe_div(portfolio, fire_number, 0) if fire_number > 0 else 0
     progress_pct = min(progress * 100, 100)
@@ -208,9 +208,8 @@ def _build_fire_progress():
 
 def _build_performance_chart():
     """Build a normalized performance chart from historical_data.csv."""
-    try:
-        hist = pd.read_csv("data/historical_data.csv")
-    except Exception:
+    hist = dlp.load_historical_data()
+    if hist.empty:
         return {
             'data': [],
             'layout': Styles.graph_layout(
@@ -221,6 +220,9 @@ def _build_performance_chart():
                 }],
             ),
         }
+
+    # Reset index so 'date' is a column (load_historical_data uses index_col=0)
+    hist = hist.reset_index()
 
     if hist.empty:
         return {
@@ -310,9 +312,10 @@ def _build_performance_chart():
 def _get_portfolio_sparkline():
     """Get last 12 data points from historical data for a portfolio sparkline."""
     try:
-        hist = pd.read_csv("data/historical_data.csv")
+        hist = dlp.load_historical_data()
         if hist.empty:
             return None
+        hist = hist.reset_index()
         data_cols = [c for c in hist.columns if c != "date"]
         prices = hist[data_cols].apply(lambda col: 10 ** col)
         avg = prices.mean(axis=1).dropna()
