@@ -366,52 +366,55 @@ def layout():
     dividend_spark = _get_dividend_sparkline()
 
     return html.Div([
+        dcc.Loading(type="circle", children=[
 
-        # ── Row 1: Hero KPIs ──
-        html.Div([
-            Styles.kpiboxes_spark("Net Worth", _fmt_currency(net_worth), Styles.colorPalette[0]),
-            Styles.kpiboxes_spark("Portfolio Value", _fmt_currency(portfolio_value), Styles.colorPalette[1], portfolio_spark),
-            Styles.kpiboxes_spark("YTD Return", f"{return_pct:.1%}", return_color),
-            Styles.kpiboxes_spark("Monthly Savings", _fmt_currency(monthly_savings), savings_color, dividend_spark),
-        ], className="kpi-row"),
+            # ── Row 1: Hero KPIs ──
+            html.Div([
+                Styles.kpiboxes_spark("Net Worth", _fmt_currency(net_worth), Styles.colorPalette[0]),
+                Styles.kpiboxes_spark("Portfolio Value", _fmt_currency(portfolio_value), Styles.colorPalette[1], portfolio_spark),
+                Styles.kpiboxes_spark("YTD Return", f"{return_pct:.1%}", return_color),
+                Styles.kpiboxes_spark("Monthly Savings", _fmt_currency(monthly_savings), savings_color, dividend_spark),
+            ], className="kpi-row"),
 
-        # ── Row 2: Allocation donut + Dividend sparkline ──
-        html.Div([
+            # ── Row 2: Allocation donut + Dividend sparkline ──
+            html.Div([
+                html.Div([
+                    dcc.Graph(
+                        id='dash-allocation-donut',
+                        figure=_build_allocation_donut(),
+                        config={'displayModeBar': False},
+                    ),
+                ], className="card"),
+                html.Div([
+                    dcc.Graph(
+                        id='dash-dividend-sparkline',
+                        figure=_build_dividend_sparkline(),
+                        config={'displayModeBar': False},
+                    ),
+                ], className="card"),
+            ], className="grid-2"),
+
+            # ── Row 3: Top Movers + FIRE Progress ──
+            html.Div([
+                html.Div([
+                    dcc.Graph(
+                        id='dash-top-movers',
+                        figure=_build_top_movers(),
+                        config={'displayModeBar': False},
+                    ),
+                ], className="card"),
+                html.Div([
+                    _build_fire_progress(),
+                ], className="card"),
+            ], className="grid-2"),
+
+            # ── Row 4: Performance Overview (full width) ──
             html.Div([
                 dcc.Graph(
-                    id='dash-allocation-donut',
-                    figure=_build_allocation_donut(),
-                    config={'displayModeBar': False},
+                    id='dash-performance-chart',
+                    figure=_build_performance_chart(),
                 ),
             ], className="card"),
-            html.Div([
-                dcc.Graph(
-                    id='dash-dividend-sparkline',
-                    figure=_build_dividend_sparkline(),
-                    config={'displayModeBar': False},
-                ),
-            ], className="card"),
-        ], className="grid-2"),
 
-        # ── Row 3: Top Movers + FIRE Progress ──
-        html.Div([
-            html.Div([
-                dcc.Graph(
-                    id='dash-top-movers',
-                    figure=_build_top_movers(),
-                    config={'displayModeBar': False},
-                ),
-            ], className="card"),
-            html.Div([
-                _build_fire_progress(),
-            ], className="card"),
-        ], className="grid-2"),
-
-        # ── Row 4: Performance Overview (full width) ──
-        html.Div([
-            dcc.Graph(
-                id='dash-performance-chart',
-                figure=_build_performance_chart(),
-            ),
-        ], className="card"),
+        ]),
     ])

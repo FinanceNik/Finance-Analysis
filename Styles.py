@@ -94,11 +94,18 @@ def skeleton_table(rows=5):
     ], className="card", style={"padding": "16px"})
 
 
+def _format_kpi_value(value):
+    """Format numeric KPI values with thousands separators and 2 decimals."""
+    if isinstance(value, (int, float)):
+        return f"{value:,.2f}"
+    return str(value)
+
+
 def kpiboxes(label_text, value, color):
     return html.Div(
         html.Div([
             html.Div(label_text, className="kpi-label"),
-            html.Div(str(value), className="kpi-value"),
+            html.Div(_format_kpi_value(value), className="kpi-value"),
         ], className="kpi-inner", style={"backgroundColor": color}),
         className="kpi-box",
     )
@@ -132,7 +139,7 @@ def kpiboxes_spark(label_text, value, color, data_points=None):
     return html.Div(
         html.Div([
             html.Div(label_text, className="kpi-label"),
-            html.Div(str(value), className="kpi-value"),
+            html.Div(_format_kpi_value(value), className="kpi-value"),
             spark,
         ], className="kpi-inner", style={"backgroundColor": color}),
         className="kpi-box",
@@ -161,7 +168,7 @@ def kpiboxes_ref(label_text, value, color, ref_label="", ref_pct=None):
     return html.Div(
         html.Div([
             html.Div(label_text, className="kpi-label"),
-            html.Div(str(value), className="kpi-value"),
+            html.Div(_format_kpi_value(value), className="kpi-value"),
             ref_line,
         ], className="kpi-inner", style={"backgroundColor": color}),
         className="kpi-box",

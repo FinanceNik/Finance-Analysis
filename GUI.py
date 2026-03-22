@@ -11,7 +11,7 @@ from pages import (page_positions, page_transactions, page_about,  # noqa: E501
                    page_projections, page_realEstate, page_analytics,
                    page_networth, page_goals, page_rebalancing,
                    page_budget, page_dashboard, page_scenarios, page_income,
-                   page_dividends, page_macro, page_backtest)
+                   page_dividends, page_macro, page_backtest, page_currency)
 import fetchAPI
 import dataLoadMacro as dlm
 import backtestEngine as bte
@@ -32,6 +32,7 @@ PAGE_MAP = {
     "/analytics": ("Portfolio", "Analytics"),
     "/transactions": ("Portfolio", "Transactions"),
     "/rebalancing": ("Portfolio", "Rebalancing"),
+    "/currency": ("Portfolio", "Currency Exposure"),
     "/budget": ("Income", "Budget"),
     "/income-statement": ("Income", "Income Statement"),
     "/dividends": ("Income", "Dividends"),
@@ -49,7 +50,7 @@ PAGE_MAP = {
 _ICONS = {
     "Dashboard": "\u229E", "Net Worth": "\u25CE",
     "Positions": "\u2630", "Analytics": "\u25C6",
-    "Transactions": "\u21C4", "Rebalancing": "\u2696",
+    "Transactions": "\u21C4", "Rebalancing": "\u2696", "Currency Exposure": "\u25CB",
     "Budget": "\u2610", "Income Statement": "\u2261",
     "Dividends": "\u2756",
     "Projections": "\u25D0", "Scenarios": "\u26A1",
@@ -97,6 +98,7 @@ sidebar = html.Div(
             _nav_link("Analytics", f"{basePath}/analytics"),
             _nav_link("Transactions", f"{basePath}/transactions"),
             _nav_link("Rebalancing", f"{basePath}/rebalancing"),
+            _nav_link("Currency Exposure", f"{basePath}/currency"),
         ], "portfolio"),
         _nav_section("Income", [
             _nav_link("Budget", f"{basePath}/budget"),
@@ -230,7 +232,7 @@ app.clientside_callback(
         var paths = {
             'overview': ['/', '/net-worth'],
             'portfolio': ['/positions', '/analytics', '/transactions',
-                          '/rebalancing'],
+                          '/rebalancing', '/currency'],
             'income': ['/budget', '/income-statement', '/dividends'],
             'planning': ['/projections', '/scenarios', '/real-estate', '/goals'],
             'macro': ['/macro', '/backtest'],
@@ -305,6 +307,7 @@ def refresh_data(n_clicks):
     if not n_clicks:
         return False, ""
     dlp.fetch_data.cache_clear()
+    dlp.load_historical_data.cache_clear()
     dlt.ingest_transactions.cache_clear()
     dlm.load_macro_data.cache_clear()
     bte.clear_cache()
@@ -360,6 +363,8 @@ def render_page_content(pathname):
         return page_macro.layout()
     elif pathname == f"{basePath}/backtest":
         return page_backtest.layout()
+    elif pathname == f"{basePath}/currency":
+        return page_currency.layout()
     elif pathname == f"{basePath}/about":
         return page_about.layout()
 

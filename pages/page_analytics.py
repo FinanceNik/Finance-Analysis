@@ -741,44 +741,46 @@ def layout():
 
     return html.Div([
         html.H4("Portfolio Analytics"),
-        kpi_row,
-        kpi_row_2,
+        dcc.Loading(type="circle", children=[
+            kpi_row,
+            kpi_row_2,
 
-        # ── Tabbed sections ──
-        html.Div([
-            dbc.Tabs([
-                dbc.Tab([
-                    _build_benchmark_section(),
-                    _build_drawdown_chart(drawdown_series),
-                ], label="Performance", tab_id="tab-performance"),
+            # ── Tabbed sections ──
+            html.Div([
+                dbc.Tabs([
+                    dbc.Tab([
+                        _build_benchmark_section(),
+                        _build_drawdown_chart(drawdown_series),
+                    ], label="Performance", tab_id="tab-performance"),
 
-                dbc.Tab([
-                    html.Div([
-                        dcc.Graph(id='top-holdings-chart', figure=weight_chart)
-                    ], className="card"),
-                    html.Div([
+                    dbc.Tab([
                         html.Div([
-                            dcc.Graph(id='pnl-by-holding-chart', figure=pnl_chart)
+                            dcc.Graph(id='top-holdings-chart', figure=weight_chart)
                         ], className="card"),
                         html.Div([
-                            dcc.Graph(id='return-by-holding-chart', figure=return_chart)
-                        ], className="card"),
-                    ], className="grid-2"),
-                ], label="Holdings", tab_id="tab-holdings"),
+                            html.Div([
+                                dcc.Graph(id='pnl-by-holding-chart', figure=pnl_chart)
+                            ], className="card"),
+                            html.Div([
+                                dcc.Graph(id='return-by-holding-chart', figure=return_chart)
+                            ], className="card"),
+                        ], className="grid-2"),
+                    ], label="Holdings", tab_id="tab-holdings"),
 
-                dbc.Tab([
-                    _build_currency_impact(df),
-                    _build_expense_ratio_section(df),
-                    _build_fee_drag_section(df),
-                ], label="Costs", tab_id="tab-costs"),
+                    dbc.Tab([
+                        _build_currency_impact(df),
+                        _build_expense_ratio_section(df),
+                        _build_fee_drag_section(df),
+                    ], label="Costs", tab_id="tab-costs"),
 
-                dbc.Tab([
-                    _build_correlation_heatmap(),
-                    html.Div([
-                        _build_sector_treemap(df),
-                        _build_geography_treemap(df),
-                    ], className="grid-2"),
-                ], label="Risk & Diversification", tab_id="tab-risk"),
-            ], active_tab="tab-performance"),
-        ], className="analytics-tabs"),
+                    dbc.Tab([
+                        _build_correlation_heatmap(),
+                        html.Div([
+                            _build_sector_treemap(df),
+                            _build_geography_treemap(df),
+                        ], className="grid-2"),
+                    ], label="Risk & Diversification", tab_id="tab-risk"),
+                ], active_tab="tab-performance"),
+            ], className="analytics-tabs"),
+        ]),
     ])

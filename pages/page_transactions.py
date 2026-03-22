@@ -1,7 +1,7 @@
 import pandas as pd
 import Styles
 import dataLoadTransactions as dlt
-from dash import dcc, html
+from dash import dcc, html, dash_table
 
 
 def layout():
@@ -94,7 +94,52 @@ def layout():
                 figure=_cumulative_contributions_figure()
             )
         ], className="card"),
+
+        html.Div([
+            _build_transactions_table()
+        ], className="card"),
     ])
+
+
+def _build_transactions_table():
+    """Build a DataTable showing recent transactions."""
+    df = dlt.ingest_transactions()
+    if df.empty:
+        return html.Div("No transaction data available.")
+
+    display_cols = ['date', 'transaction', 'symbol', 'quantity', 'unit_price', 'net_amount']
+    available = [c for c in display_cols if c in df.columns]
+    df = df[available].copy()
+
+    if 'date' in df.columns:
+        df = df.sort_values('date', ascending=False)
+        df['date'] = df['date'].dt.strftime('%Y-%m-%d')
+
+    columns = [{"name": c.replace('_', ' ').title(), "id": c} for c in available]
+
+    return dash_table.DataTable(
+        id="transactions-table",
+        columns=columns,
+        data=df.to_dict("records"),
+        page_size=20,
+        sort_action="native",
+        filter_action="native",
+        export_format="csv",
+        export_headers="display",
+        style_table={"overflowX": "auto", "overflowY": "auto", "maxHeight": "600px"},
+        style_cell={"padding": "8px", "textAlign": "left", "fontSize": "13px"},
+        style_header={
+            "backgroundColor": Styles.colorPalette[0],
+            "color": "white",
+            "fontWeight": "bold",
+            "fontSize": "13px",
+            "fontFamily": Styles.GRAPH_LAYOUT["font"]["family"],
+        },
+        style_data_conditional=[
+            {"if": {"row_index": "odd"},
+             "backgroundColor": "var(--table-stripe, #f9f9f9)"},
+        ],
+    )
 
 
 def _cumulative_contributions_figure():

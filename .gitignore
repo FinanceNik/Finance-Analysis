@@ -6,8 +6,15 @@ __pycache__/
 # C extensions
 *.so
 
-# dont push the data files
+# Data files
+data/
 *.csv
+
+# macOS
+.DS_Store
+
+# Claude Code
+.claude/
 
 # Distribution / packaging
 .Python

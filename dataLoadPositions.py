@@ -74,14 +74,10 @@ def load_historical_data() -> pd.DataFrame:
     return pd.read_csv(path, index_col=0, parse_dates=True)
 
 
-def _standardize_columns(df: pd.DataFrame) -> pd.DataFrame:
-    return standardize_columns(df)
-
-
 def _parse_xls_positions(filepath: str) -> pd.DataFrame:
     """Parse the broker XLS export which has category header rows and subtotal rows."""
     df = pd.read_excel(filepath)
-    df = _standardize_columns(df)
+    df = standardize_columns(df)
 
     # The first unnamed column contains category headers like "Shares", "ETFs", "Cryptocurrencies"
     # and subtotal/total rows. We need to extract the category and filter to actual position rows.
@@ -149,7 +145,7 @@ def _load_geography_map() -> dict:
     for f in csv_files:
         try:
             df = pd.read_csv(f, sep=",")
-            df = _standardize_columns(df)
+            df = standardize_columns(df)
             if "symbol" in df.columns and "geography" in df.columns:
                 return dict(zip(df["symbol"].str.strip(), df["geography"].str.strip()))
         except Exception:
@@ -169,7 +165,7 @@ def fetch_data() -> pd.DataFrame:
         df = _parse_xls_positions(_positions_filepath)
     else:
         df = pd.read_csv(_positions_filepath, sep=",")
-        df = _standardize_columns(df)
+        df = standardize_columns(df)
         for col in df.columns:
             if "date" in col:
                 df[col] = pd.to_datetime(df[col], errors="coerce")
@@ -191,7 +187,7 @@ def get_asset_mapping() -> pd.DataFrame:
         return pd.DataFrame()
 
     df = pd.read_csv(_transactions_filepath, sep=";", encoding="latin-1")
-    df = _standardize_columns(df)
+    df = standardize_columns(df)
     asset_df = df[['symbol', 'name', 'isin', 'currency']].dropna(subset=['symbol']).drop_duplicates()
     asset_df = asset_df.reset_index(drop=True)
     return asset_df
