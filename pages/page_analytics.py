@@ -977,6 +977,243 @@ def _build_monthly_returns_heatmap(portfolio_daily):
     ], className="card")
 
 
+def _build_risk_contribution(df):
+    """Build marginal risk contribution chart per holding using covariance matrix."""
+    try:
+        hist = dlp.load_historical_data().reset_index()
+        if "date" in hist.columns:
+            hist = hist.set_index("date")
+        hist = 10 ** hist
+        daily_returns = hist.pct_change(fill_method=None).dropna()
+    except Exception:
+        return html.Div()
+
+    # Match holdings to historical columns
+    holdings = []
+    for _, row in df.iterrows():
+        sym = row.get("symbol", "")
+        w = row.get("weight", 0)
+        col = sym if sym in daily_returns.columns else next(
+            (c for c in daily_returns.columns if c.startswith(sym)), None)
+        if col and w > 0:
+            holdings.append({"symbol": sym, "col": col, "weight": w})
+
+    if len(holdings) < 2:
+        return html.Div()
+
+    cols = [h["col"] for h in holdings]
+    weights = np.array([h["weight"] for h in holdings])
+    weights = weights / weights.sum()
+    symbols = [h["symbol"] for h in holdings]
+
+    cov = daily_returns[cols].cov() * 252
+    portfolio_var = float(weights @ cov.values @ weights)
+    portfolio_vol = np.sqrt(portfolio_var)
+
+    # Marginal contribution: (Cov @ w) * w / portfolio_vol
+    mcr = (cov.values @ weights) * weights / portfolio_vol
+    risk_pct = (mcr / portfolio_vol) * 100  # as % of total risk
+
+    rc_df = pd.DataFrame({
+        "symbol": symbols,
+        "risk_contribution": risk_pct,
+        "weight": weights * 100,
+    }).sort_values("risk_contribution", ascending=True)
+
+    chart = {
+        'data': [{
+            'type': 'bar',
+            'x': rc_df['risk_contribution'].round(1).tolist(),
+            'y': rc_df['symbol'].tolist(),
+            'orientation': 'h',
+            'marker': {'color': [Styles.strongRed if v > w else Styles.colorPalette[0]
+                                 for v, w in zip(rc_df['risk_contribution'], rc_df['weight'])]},
+            'text': [f"{v:.1f}% risk / {w:.1f}% weight"
+                     for v, w in zip(rc_df['risk_contribution'], rc_df['weight'])],
+            'textposition': 'outside',
+            'hovertemplate': '%{y}<br>Risk: %{x:.1f}%<br>%{text}<extra></extra>',
+        }],
+        'layout': {
+            **Styles.graph_layout(
+                title='Risk Contribution by Holding (red = risk > weight)',
+                xaxis={'title': 'Risk Contribution (%)'},
+                margin={'t': 40, 'b': 40, 'l': 100, 'r': 120},
+            ),
+            'height': max(250, len(rc_df) * 35),
+        },
+    }
+
+    return html.Div([
+        dcc.Graph(id='risk-contribution-chart', figure=chart)
+    ], className="card")
+
+
+def _build_beta_chart(portfolio_daily):
+    """Build portfolio beta scatter plot and KPI vs SPY benchmark."""
+    try:
+        hist = dlp.load_historical_data().reset_index()
+        if "date" in hist.columns:
+            hist = hist.set_index("date")
+        hist = 10 ** hist
+        daily_returns = hist.pct_change(fill_method=None).dropna()
+    except Exception:
+        return html.Div()
+
+    # Find SPY column
+    spy_col = next((c for c in daily_returns.columns if c.startswith("SPY")), None)
+    if spy_col is None:
+        return html.Div()
+
+    spy_returns = daily_returns[spy_col].dropna()
+    common = portfolio_daily.index.intersection(spy_returns.index)
+    if len(common) < 60:
+        return html.Div()
+
+    port = portfolio_daily.reindex(common).values
+    bench = spy_returns.reindex(common).values
+
+    # Beta = Cov(port, bench) / Var(bench)
+    beta = float(np.cov(port, bench)[0, 1] / np.var(bench))
+    # R-squared
+    corr = float(np.corrcoef(port, bench)[0, 1])
+    r_squared = corr ** 2
+
+    # Subsample for scatter (too many points is slow)
+    step = max(1, len(port) // 500)
+    x_plot = (bench[::step] * 100).tolist()
+    y_plot = (port[::step] * 100).tolist()
+
+    # Regression line
+    x_range = [min(x_plot), max(x_plot)]
+    y_range = [beta * x for x in x_range]
+
+    chart = {
+        'data': [
+            {
+                'type': 'scatter',
+                'x': x_plot,
+                'y': y_plot,
+                'mode': 'markers',
+                'marker': {'size': 3, 'color': Styles.colorPalette[0], 'opacity': 0.4},
+                'name': 'Daily Returns',
+                'hovertemplate': 'SPY: %{x:.2f}%<br>Portfolio: %{y:.2f}%<extra></extra>',
+            },
+            {
+                'type': 'scatter',
+                'x': x_range,
+                'y': y_range,
+                'mode': 'lines',
+                'line': {'color': Styles.strongRed, 'width': 2},
+                'name': f'Beta = {beta:.2f}',
+            },
+        ],
+        'layout': Styles.graph_layout(
+            title=f'Portfolio Beta vs SPY: {beta:.2f} (R\u00b2 = {r_squared:.2f})',
+            xaxis={'title': 'SPY Daily Return (%)', 'zeroline': True},
+            yaxis={'title': 'Portfolio Daily Return (%)', 'zeroline': True},
+            legend={'orientation': 'h', 'y': -0.15, 'x': 0.5, 'xanchor': 'center'},
+        ),
+    }
+
+    return html.Div([
+        html.Div([
+            Styles.kpiboxes('Portfolio Beta', f"{beta:.2f}",
+                            Styles.strongGreen if beta < 1 else Styles.strongRed),
+            Styles.kpiboxes('R\u00b2', f"{r_squared:.2f}", Styles.colorPalette[1]),
+            Styles.kpiboxes('Correlation', f"{corr:.2f}", Styles.colorPalette[0]),
+        ], className="kpi-row"),
+        dcc.Graph(id='beta-scatter-chart', figure=chart),
+    ], className="card")
+
+
+def _build_efficient_frontier(df):
+    """Plot current portfolio vs random portfolios on risk/return space."""
+    try:
+        hist = dlp.load_historical_data().reset_index()
+        if "date" in hist.columns:
+            hist = hist.set_index("date")
+        hist = 10 ** hist
+        daily_returns = hist.pct_change(fill_method=None).dropna()
+    except Exception:
+        return html.Div()
+
+    # Match holdings
+    holdings = []
+    for _, row in df.iterrows():
+        sym = row.get("symbol", "")
+        w = row.get("weight", 0)
+        col = sym if sym in daily_returns.columns else next(
+            (c for c in daily_returns.columns if c.startswith(sym)), None)
+        if col and w > 0:
+            holdings.append({"symbol": sym, "col": col, "weight": w})
+
+    if len(holdings) < 2:
+        return html.Div()
+
+    cols = [h["col"] for h in holdings]
+    current_weights = np.array([h["weight"] for h in holdings])
+    current_weights = current_weights / current_weights.sum()
+
+    ret = daily_returns[cols]
+    mean_returns = ret.mean().values * 252
+    cov_matrix = ret.cov().values * 252
+    n = len(cols)
+
+    # Current portfolio
+    curr_ret = float(current_weights @ mean_returns)
+    curr_vol = float(np.sqrt(current_weights @ cov_matrix @ current_weights))
+
+    # Generate random portfolios
+    np.random.seed(42)
+    n_portfolios = 2000
+    results = []
+    for _ in range(n_portfolios):
+        w = np.random.dirichlet(np.ones(n))
+        p_ret = float(w @ mean_returns)
+        p_vol = float(np.sqrt(w @ cov_matrix @ w))
+        sharpe = (p_ret - config.RISK_FREE_RATE) / p_vol if p_vol > 0 else 0
+        results.append((p_vol * 100, p_ret * 100, sharpe))
+
+    vols = [r[0] for r in results]
+    rets = [r[1] for r in results]
+    sharpes = [r[2] for r in results]
+
+    chart = {
+        'data': [
+            {
+                'type': 'scatter',
+                'x': vols,
+                'y': rets,
+                'mode': 'markers',
+                'marker': {'size': 3, 'color': sharpes, 'colorscale': 'Viridis',
+                           'colorbar': {'title': 'Sharpe'}, 'opacity': 0.6},
+                'name': 'Random Portfolios',
+                'hovertemplate': 'Vol: %{x:.1f}%<br>Return: %{y:.1f}%<extra></extra>',
+            },
+            {
+                'type': 'scatter',
+                'x': [curr_vol * 100],
+                'y': [curr_ret * 100],
+                'mode': 'markers',
+                'marker': {'size': 15, 'color': Styles.strongRed, 'symbol': 'star',
+                           'line': {'width': 2, 'color': 'white'}},
+                'name': 'Your Portfolio',
+                'hovertemplate': f'Your Portfolio<br>Vol: {curr_vol*100:.1f}%<br>Return: {curr_ret*100:.1f}%<extra></extra>',
+            },
+        ],
+        'layout': Styles.graph_layout(
+            title='Efficient Frontier (Your Portfolio vs Random Allocations)',
+            xaxis={'title': 'Annualized Volatility (%)', 'ticksuffix': '%'},
+            yaxis={'title': 'Annualized Return (%)', 'ticksuffix': '%'},
+            legend={'orientation': 'h', 'y': -0.15, 'x': 0.5, 'xanchor': 'center'},
+        ),
+    }
+
+    return html.Div([
+        dcc.Graph(id='efficient-frontier-chart', figure=chart)
+    ], className="card")
+
+
 def layout():
     df, metrics, drawdown_series, portfolio_daily = _compute_analytics()
 
@@ -1106,8 +1343,11 @@ def layout():
                     ], label="Costs", tab_id="tab-costs"),
 
                     dbc.Tab([
+                        _build_risk_contribution(df),
                         _build_rolling_sharpe(portfolio_daily),
+                        _build_beta_chart(portfolio_daily),
                         _build_var_chart(portfolio_daily, metrics.get("total_mv", 0)),
+                        _build_efficient_frontier(df),
                         _build_correlation_heatmap(),
                         html.Div([
                             _build_sector_treemap(df),
