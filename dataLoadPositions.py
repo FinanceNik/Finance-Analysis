@@ -5,6 +5,7 @@ import glob
 import pandas as pd
 from datetime import datetime
 from functools import lru_cache
+import config
 from utils import standardize_columns
 
 logger = logging.getLogger(__name__)
@@ -121,9 +122,10 @@ def _parse_xls_positions(filepath: str) -> pd.DataFrame:
     unnamed_cols = [c for c in df_positions.columns if "unnamed" in str(c).lower()]
     df_positions = df_positions.drop(columns=unnamed_cols, errors="ignore")
 
-    # Map category names to geography based on known ticker patterns
-    # The CSV had geography info; for XLS we derive from the old CSV mapping
+    # Map symbols to geography: try CSV mapping first, fall back to config.GEO_MAP
     geography_map = _load_geography_map()
+    if not geography_map:
+        geography_map = config.GEO_MAP
     df_positions["geography"] = df_positions["symbol"].map(geography_map).fillna("Other")
 
     # Ensure numeric columns are numeric

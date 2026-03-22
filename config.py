@@ -26,6 +26,27 @@ RE_DEFAULT_INCOME = 1_700   # monthly CHF
 RE_DEFAULT_COSTS = 1_200    # monthly CHF
 RE_DEFAULT_YEARS = 20
 
+# Geography mapping: broker symbol → rebalancing category
+GEO_MAP = {
+    "AHYQ":   "World",    # Amundi MSCI World III
+    "WOSC":   "World",    # SPDR MSCI World Small Cap
+    "XDEM":   "World",    # Xtrackers MSCI World Momentum
+    "CBMWOR": "World",    # Lyxor MSCI World
+    "CBMEM":  "EM",       # Amundi MSCI EM
+    "VFEM":   "EM",       # Vanguard FTSE EM
+    "SPICHA": "EU",       # UBS ETF SPI (Swiss)
+    "VGEU":   "EU",       # Vanguard FTSE Europe
+    "APC":    "US",       # Apple
+    "307":    "US",       # Shopify (listed on US exchange)
+    "ABEC":   "US",       # Alphabet
+    "QQQM":   "US",       # Invesco Nasdaq 100
+    "BTC":    "Crypto",
+    "ETH":    "Crypto",
+    "BNT":    "Crypto",
+    "LINK":   "Crypto",
+    "POL":    "Crypto",
+}
+
 # ETF expense ratios (TER) — manually maintained
 ETF_EXPENSE_RATIOS = {
     "AHYQ":   0.0022,  # Amundi MSCI World III — 0.22%
