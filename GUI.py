@@ -13,13 +13,18 @@ from pages import (page_positions, page_transactions, page_about,  # noqa: E501
                    page_budget, page_dashboard, page_scenarios, page_income,
                    page_dividends, page_macro, page_backtest, page_currency,
                    page_watchlist, page_calendar, page_attribution,
-                   page_peers)
+                   page_peers, page_tools, page_settings, page_alerts,
+                   page_snapshots, page_taxloss, page_sizing, page_whatif,
+                   page_drip)
 import fetchAPI
 import dataLoadMacro as dlm
 import backtestEngine as bte
 
-fetchAPI.fetch_historical_data_yfinance()
-fetchAPI.fetch_macro_data()
+import os, sys
+if not os.path.exists("data/historical_data.csv"):
+    fetchAPI.fetch_historical_data_yfinance()
+if not os.path.exists("data/macro_data.csv"):
+    fetchAPI.fetch_macro_data()
 
 basePath = ''
 app = dash.Dash(__name__, suppress_callback_exceptions=True,
@@ -33,21 +38,12 @@ PAGE_MAP = {
     "/positions": ("Portfolio", "Positions"),
     "/analytics": ("Portfolio", "Analytics"),
     "/transactions": ("Portfolio", "Transactions"),
-    "/rebalancing": ("Portfolio", "Rebalancing"),
-    "/currency": ("Portfolio", "Currency Exposure"),
-    "/attribution": ("Portfolio", "Attribution"),
-    "/watchlist": ("Portfolio", "Watchlist"),
-    "/peers": ("Portfolio", "Peer Comparison"),
-    "/budget": ("Income", "Budget"),
-    "/income-statement": ("Income", "Income Statement"),
-    "/dividends": ("Income", "Dividends"),
-    "/calendar": ("Income", "Income Calendar"),
+    "/budget": ("Planning", "Budget & FIRE"),
+    "/income": ("Planning", "Income & Dividends"),
     "/projections": ("Planning", "Projections"),
-    "/scenarios": ("Planning", "Scenarios"),
-    "/real-estate": ("Planning", "Real Estate"),
-    "/goals": ("Planning", "Goals"),
-    "/macro": ("Macro", "Macro Dashboard"),
-    "/backtest": ("Macro", "Strategy Backtest"),
+    "/tools": ("Tools", "Tools"),
+    "/macro": ("Macro", "Macro & Backtest"),
+    "/settings": ("", "Settings"),
     "/about": ("", "About"),
 }
 
@@ -56,17 +52,13 @@ PAGE_MAP = {
 _ICONS = {
     "Dashboard": "\u229E", "Net Worth": "\u25CE",
     "Positions": "\u2630", "Analytics": "\u25C6",
-    "Transactions": "\u21C4", "Rebalancing": "\u2696", "Currency Exposure": "\u25CB",
-    "Attribution": "\u25E7",
-    "Watchlist": "\u2605",
-    "Peer Comparison": "\u229C",
-    "Budget": "\u2610", "Income Statement": "\u2261",
-    "Dividends": "\u2756",
-    "Income Calendar": "\u25A6",
-    "Projections": "\u25D0", "Scenarios": "\u26A1",
-    "Real Estate": "\u2302", "Goals": "\u25C9",
-    "Macro Dashboard": "\u25C9",
-    "Strategy Backtest": "\u25B7",
+    "Transactions": "\u21C4",
+    "Budget & FIRE": "\u2610",
+    "Income & Dividends": "\u2261",
+    "Projections": "\u25D0",
+    "Tools": "\u2692",
+    "Macro & Backtest": "\u25C9",
+    "Settings": "\u2699",
     "About": "\u24D8",
 }
 
@@ -107,29 +99,20 @@ sidebar = html.Div(
             _nav_link("Positions", f"{basePath}/positions"),
             _nav_link("Analytics", f"{basePath}/analytics"),
             _nav_link("Transactions", f"{basePath}/transactions"),
-            _nav_link("Rebalancing", f"{basePath}/rebalancing"),
-            _nav_link("Currency Exposure", f"{basePath}/currency"),
-            _nav_link("Attribution", f"{basePath}/attribution"),
-            _nav_link("Watchlist", f"{basePath}/watchlist"),
-            _nav_link("Peer Comparison", f"{basePath}/peers"),
         ], "portfolio"),
-        _nav_section("Income", [
-            _nav_link("Budget", f"{basePath}/budget"),
-            _nav_link("Income Statement", f"{basePath}/income-statement"),
-            _nav_link("Dividends", f"{basePath}/dividends"),
-            _nav_link("Income Calendar", f"{basePath}/calendar"),
-        ], "income"),
         _nav_section("Planning", [
+            _nav_link("Budget & FIRE", f"{basePath}/budget"),
+            _nav_link("Income & Dividends", f"{basePath}/income"),
             _nav_link("Projections", f"{basePath}/projections"),
-            _nav_link("Scenarios", f"{basePath}/scenarios"),
-            _nav_link("Real Estate", f"{basePath}/real-estate"),
-            _nav_link("Goals", f"{basePath}/goals"),
         ], "planning"),
+        _nav_section("Tools", [
+            _nav_link("Tools", f"{basePath}/tools"),
+        ], "tools"),
         _nav_section("Macro", [
-            _nav_link("Macro Dashboard", f"{basePath}/macro"),
-            _nav_link("Strategy Backtest", f"{basePath}/backtest"),
+            _nav_link("Macro & Backtest", f"{basePath}/macro"),
         ], "macro"),
         dbc.Nav([
+            _nav_link("Settings", f"{basePath}/settings"),
             _nav_link("About", f"{basePath}/about"),
         ], vertical=True, pills=True, style={"marginTop": "12px"}),
     ],
@@ -242,14 +225,13 @@ def update_breadcrumb(pathname):
 app.clientside_callback(
     """
     function(pathname, n1, n2, n3, n4, n5) {
-        var sections = ['overview', 'portfolio', 'income', 'planning', 'macro'];
+        var sections = ['overview', 'portfolio', 'planning', 'tools', 'macro'];
         var paths = {
             'overview': ['/', '/net-worth'],
-            'portfolio': ['/positions', '/analytics', '/transactions',
-                          '/rebalancing', '/currency', '/attribution', '/watchlist', '/peers'],
-            'income': ['/budget', '/income-statement', '/dividends', '/calendar'],
-            'planning': ['/projections', '/scenarios', '/real-estate', '/goals'],
-            'macro': ['/macro', '/backtest'],
+            'portfolio': ['/positions', '/analytics', '/transactions'],
+            'planning': ['/budget', '/income', '/projections'],
+            'tools': ['/tools'],
+            'macro': ['/macro'],
         };
 
         var triggered = dash_clientside.callback_context.triggered;
@@ -290,8 +272,8 @@ app.clientside_callback(
     [Input("url", "pathname"),
      Input("nav-header-overview", "n_clicks"),
      Input("nav-header-portfolio", "n_clicks"),
-     Input("nav-header-income", "n_clicks"),
      Input("nav-header-planning", "n_clicks"),
+     Input("nav-header-tools", "n_clicks"),
      Input("nav-header-macro", "n_clicks")],
     prevent_initial_call=False
 )
@@ -350,44 +332,26 @@ app.clientside_callback(
 def render_page_content(pathname):
     if pathname == f"{basePath}/":
         return page_dashboard.layout()
-    elif pathname == f"{basePath}/positions":
-        return page_positions.layout()
-    elif pathname == f"{basePath}/transactions":
-        return page_transactions.layout()
-    elif pathname == f"{basePath}/projections":
-        return page_projections.layout()
-    elif pathname == f"{basePath}/real-estate":
-        return page_realEstate.layout()
-    elif pathname == f"{basePath}/analytics":
-        return page_analytics.layout()
     elif pathname == f"{basePath}/net-worth":
         return page_networth.layout()
-    elif pathname == f"{basePath}/goals":
-        return page_goals.layout()
-    elif pathname == f"{basePath}/rebalancing":
-        return page_rebalancing.layout()
+    elif pathname == f"{basePath}/positions":
+        return page_positions.layout()
+    elif pathname == f"{basePath}/analytics":
+        return page_analytics.layout()
+    elif pathname == f"{basePath}/transactions":
+        return page_transactions.layout()
     elif pathname == f"{basePath}/budget":
         return page_budget.layout()
-    elif pathname == f"{basePath}/scenarios":
-        return page_scenarios.layout()
-    elif pathname == f"{basePath}/income-statement":
+    elif pathname == f"{basePath}/income":
         return page_income.layout()
-    elif pathname == f"{basePath}/dividends":
-        return page_dividends.layout()
+    elif pathname == f"{basePath}/projections":
+        return page_projections.layout()
+    elif pathname == f"{basePath}/tools":
+        return page_tools.layout()
     elif pathname == f"{basePath}/macro":
         return page_macro.layout()
-    elif pathname == f"{basePath}/backtest":
-        return page_backtest.layout()
-    elif pathname == f"{basePath}/currency":
-        return page_currency.layout()
-    elif pathname == f"{basePath}/attribution":
-        return page_attribution.layout()
-    elif pathname == f"{basePath}/watchlist":
-        return page_watchlist.layout()
-    elif pathname == f"{basePath}/calendar":
-        return page_calendar.layout()
-    elif pathname == f"{basePath}/peers":
-        return page_peers.layout()
+    elif pathname == f"{basePath}/settings":
+        return page_settings.layout()
     elif pathname == f"{basePath}/about":
         return page_about.layout()
 
@@ -408,6 +372,13 @@ page_watchlist.register_callbacks(app)
 page_calendar.register_callbacks(app)
 page_attribution.register_callbacks(app)
 page_peers.register_callbacks(app)
+page_alerts.register_callbacks(app)
+page_sizing.register_callbacks(app)
+page_whatif.register_callbacks(app)
+page_taxloss.register_callbacks(app)
+page_snapshots.register_callbacks(app)
+page_drip.register_callbacks(app)
+page_settings.register_callbacks(app)
 
 if __name__ == "__main__":
-    app.run(host='0.0.0.0', port=8080, debug=False)
+    app.run(host='0.0.0.0', port=8080, debug=sys.version_info < (3, 14))
