@@ -95,10 +95,141 @@ def layout():
             )
         ], className="card"),
 
+        # ── Realized P&L Section ──
+        *_realized_pl_section(),
+
         html.Div([
             _build_transactions_table()
         ], className="card"),
     ])
+
+
+def _realized_pl_section():
+    """Build the realized P&L KPIs, charts, and closed-positions table."""
+    kpis = dlt.realized_pl_kpis()
+    quarterly = dlt.realized_pl_by_quarter()
+    yearly = dlt.realized_pl_by_year()
+    rpl = dlt.realized_pl_table()
+
+    children = []
+
+    # ── Section header ──
+    children.append(html.H4("Realized P&L",
+                            style={"marginTop": "32px", "marginBottom": "8px"}))
+
+    # ── KPI row ──
+    total_color = Styles.strongGreen if kpis["total_pl"] >= 0 else Styles.strongRed
+    ytd_color = Styles.strongGreen if kpis["ytd_pl"] >= 0 else Styles.strongRed
+    children.append(html.Div([
+        Styles.kpiboxes("Total Realized P&L", kpis["total_pl"], total_color),
+        Styles.kpiboxes("Realized P&L YTD", kpis["ytd_pl"], ytd_color),
+        Styles.kpiboxes("Closed Trades", kpis["num_trades"], Styles.colorPalette[1]),
+        Styles.kpiboxes("Avg P&L / Trade", kpis["avg_pl"],
+                        Styles.strongGreen if kpis["avg_pl"] >= 0 else Styles.strongRed),
+    ], className="kpi-row"))
+
+    # ── Quarterly chart ──
+    if not quarterly.empty:
+        q_labels = [str(p) for p in quarterly["period"]]
+        q_values = quarterly["realized_pl"].tolist()
+        q_colors = [Styles.strongGreen if v >= 0 else Styles.strongRed for v in q_values]
+        children.append(html.Div([
+            html.H5("Realized P&L by Quarter"),
+            dcc.Graph(
+                id="realized-pl-quarterly",
+                figure={
+                    "data": [{
+                        "x": q_labels,
+                        "y": q_values,
+                        "type": "bar",
+                        "marker": {"color": q_colors},
+                        "name": "Realized P&L",
+                    }],
+                    "layout": Styles.graph_layout(
+                        title="",
+                        xaxis={"title": "Quarter"},
+                        yaxis={"title": "Realized P&L"},
+                    ),
+                },
+            )
+        ], className="card"))
+
+    # ── Yearly chart ──
+    if not yearly.empty:
+        y_labels = [str(int(y)) for y in yearly["year"]]
+        y_values = yearly["realized_pl"].tolist()
+        y_colors = [Styles.strongGreen if v >= 0 else Styles.strongRed for v in y_values]
+        children.append(html.Div([
+            html.H5("Realized P&L by Year"),
+            dcc.Graph(
+                id="realized-pl-yearly",
+                figure={
+                    "data": [{
+                        "x": y_labels,
+                        "y": y_values,
+                        "type": "bar",
+                        "marker": {"color": y_colors},
+                        "name": "Realized P&L",
+                    }],
+                    "layout": Styles.graph_layout(
+                        title="",
+                        xaxis={"title": "Year"},
+                        yaxis={"title": "Realized P&L"},
+                    ),
+                },
+            )
+        ], className="card"))
+
+    # ── Closed Positions table ──
+    if not rpl.empty:
+        display = rpl.copy()
+        display["date"] = display["date"].dt.strftime("%Y-%m-%d")
+        display = display.sort_values("date", ascending=False)
+        table_cols = [
+            {"name": "Date", "id": "date"},
+            {"name": "Symbol", "id": "symbol"},
+            {"name": "Quantity", "id": "sell_qty"},
+            {"name": "Sell Price", "id": "sell_price"},
+            {"name": "Proceeds", "id": "proceeds"},
+            {"name": "Cost Basis", "id": "cost_basis"},
+            {"name": "Realized P&L", "id": "realized_pl"},
+        ]
+        children.append(html.Div([
+            html.H5("Closed Positions"),
+            dash_table.DataTable(
+                id="closed-positions-table",
+                columns=table_cols,
+                data=display.to_dict("records"),
+                page_size=15,
+                sort_action="native",
+                filter_action="native",
+                export_format="csv",
+                export_headers="display",
+                style_table={"overflowX": "auto", "overflowY": "auto",
+                              "maxHeight": "500px"},
+                style_cell={"padding": "8px", "textAlign": "left",
+                             "fontSize": "13px"},
+                style_header={
+                    "backgroundColor": Styles.colorPalette[0],
+                    "color": "white",
+                    "fontWeight": "bold",
+                    "fontSize": "13px",
+                    "fontFamily": Styles.GRAPH_LAYOUT["font"]["family"],
+                },
+                style_data_conditional=[
+                    {"if": {"row_index": "odd"},
+                     "backgroundColor": "var(--table-stripe, #f9f9f9)"},
+                    {"if": {"filter_query": "{realized_pl} > 0",
+                            "column_id": "realized_pl"},
+                     "color": Styles.strongGreen, "fontWeight": "600"},
+                    {"if": {"filter_query": "{realized_pl} < 0",
+                            "column_id": "realized_pl"},
+                     "color": Styles.strongRed, "fontWeight": "600"},
+                ],
+            )
+        ], className="card"))
+
+    return children
 
 
 def _build_transactions_table():

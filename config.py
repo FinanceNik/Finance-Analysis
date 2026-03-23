@@ -16,6 +16,22 @@ FIRE_WITHDRAWAL_RATE = 0.04
 FIRE_GROWTH_RATE = 0.07
 MAX_FIRE_YEARS = 200
 
+# Emergency fund parameters
+EMERGENCY_FUND_MONTHS = 6
+ESTIMATED_MONTHLY_EXPENSES = 5000
+
+# Swiss tax estimation (simplified)
+TAX_RATE_DIVIDENDS = 0.35  # Swiss withholding tax on dividends (refundable portion)
+TAX_RATE_WEALTH = 0.003    # Approximate cantonal wealth tax rate
+TAX_RATE_INCOME = 0.25     # Approximate marginal income tax rate
+
+# Financial goals (name, target amount, target date, priority)
+FINANCIAL_GOALS = [
+    {"name": "Emergency Fund", "target": 30000, "deadline": "2025-12-31", "priority": "High"},
+    {"name": "Home Down Payment", "target": 100000, "deadline": "2028-06-30", "priority": "Medium"},
+    {"name": "Education Fund", "target": 50000, "deadline": "2035-01-01", "priority": "Low"},
+]
+
 # Expected annual portfolio return (used for fee drag projections)
 EXPECTED_RETURN = 0.08
 

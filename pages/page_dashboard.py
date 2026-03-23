@@ -387,6 +387,22 @@ def _get_dividend_sparkline():
     except Exception:
         return None
 
+def _emergency_fund_months(monthly_expenses):
+    """Calculate how many months of expenses the emergency fund covers.
+
+    Uses a simple heuristic: cash / money-market positions are hard to detect
+    automatically, so we rely on the net-worth 'cash' field from user settings.
+    Falls back to 0 if no cash value is recorded.
+    """
+    nw_data = user_settings.get("networth", {}) or {}
+    cash = 0
+    if isinstance(nw_data, dict):
+        cash = nw_data.get("cash", 0) or 0
+    if monthly_expenses <= 0:
+        monthly_expenses = config.ESTIMATED_MONTHLY_EXPENSES
+    return cash / monthly_expenses if monthly_expenses > 0 else 0
+
+
 def layout():
     # ── Gather summary data ──
     portfolio_value = dlp.portfolio_total_value()
@@ -411,6 +427,16 @@ def layout():
     total_expenses = sum(v for v in exp.values() if isinstance(v, (int, float)))
     monthly_savings = total_income - total_expenses
 
+    # Emergency fund calculation
+    monthly_expenses = total_expenses if total_expenses > 0 else config.ESTIMATED_MONTHLY_EXPENSES
+    ef_months = _emergency_fund_months(monthly_expenses)
+    if ef_months >= config.EMERGENCY_FUND_MONTHS:
+        ef_color = Styles.strongGreen
+    elif ef_months >= 3:
+        ef_color = "#f5a623"  # amber/yellow
+    else:
+        ef_color = Styles.strongRed
+
     # Color for return / savings
     return_color = Styles.strongGreen if return_pct >= 0 else Styles.strongRed
     savings_color = Styles.strongGreen if monthly_savings >= 0 else Styles.strongRed
@@ -428,6 +454,7 @@ def layout():
                 Styles.kpiboxes_spark("Portfolio Value", _fmt_currency(portfolio_value), Styles.colorPalette[1], portfolio_spark),
                 Styles.kpiboxes_spark("YTD Return", f"{return_pct:.1%}", return_color),
                 Styles.kpiboxes_spark("Monthly Savings", _fmt_currency(monthly_savings), savings_color, dividend_spark),
+                Styles.kpiboxes_spark("Emergency Fund", f"{ef_months:.1f} mo", ef_color),
             ], className="kpi-row"),
 
             # ── Row 2: Allocation donut + Dividend sparkline ──

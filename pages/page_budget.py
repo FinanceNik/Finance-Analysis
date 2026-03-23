@@ -3,6 +3,7 @@ from dash import dcc, html, Input, Output
 import Styles
 import config
 import dataLoadPositions as dlp
+import dataLoadTransactions as dlt
 import user_settings
 
 
@@ -180,10 +181,40 @@ def register_callbacks(app):
         # --- FIRE projection chart ---
         projection = _build_fire_projection(portfolio, annual_savings, fire_number)
 
+        # --- Tax Estimation ---
+        # TTM dividends from transaction data
+        ttm_dividends = abs(dlt.total_transaction_amount(dlt.currentYear, "Dividend") or 0)
+        # If current year has little data, supplement with budget estimate
+        if ttm_dividends <= 0:
+            ttm_dividends = dividends * 12
+
+        est_dividend_tax = ttm_dividends * config.TAX_RATE_DIVIDENDS
+        est_wealth_tax = portfolio * config.TAX_RATE_WEALTH
+        annual_income = total_income * 12
+        est_income_tax = annual_income * config.TAX_RATE_INCOME
+        est_total_tax = est_dividend_tax + est_wealth_tax + est_income_tax
+
+        tax_color = "#636366"  # muted grey
+        tax_section = html.Div([
+            html.H4("Tax Estimation"),
+            html.Div([
+                Styles.kpiboxes("Dividend Tax (35%)", f"{est_dividend_tax:,.0f}", tax_color),
+                Styles.kpiboxes("Wealth Tax (~0.3%)", f"{est_wealth_tax:,.0f}", tax_color),
+                Styles.kpiboxes("Income Tax (~25%)", f"{est_income_tax:,.0f}", tax_color),
+                Styles.kpiboxes("Total Est. Annual Tax", f"{est_total_tax:,.0f}", Styles.colorPalette[2]),
+            ], className="kpi-row"),
+            html.P(
+                "These are rough estimates. Consult a tax advisor for precise calculations.",
+                style={"color": "var(--text-secondary)", "fontSize": "13px",
+                       "marginTop": "8px", "fontStyle": "italic"},
+            ),
+        ])
+
         charts = html.Div([
             html.Div([
                 dcc.Graph(id='budget-sankey', figure=sankey)
             ], className="card"),
+            tax_section,
             html.Div([
                 html.Div([
                     dcc.Graph(id='budget-pie', figure=pie_chart)
