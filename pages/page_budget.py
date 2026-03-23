@@ -35,7 +35,6 @@ def layout():
         ("Salary (Monthly)", "budget-salary", inc.get("salary", 9583)),
         ("Side Income", "budget-side", inc.get("side", 375)),
         ("Dividend Income", "budget-dividends", inc.get("dividends", 292)),
-        ("Leibrente", "budget-leibrente", inc.get("leibrente", 1200)),
         ("Other Income", "budget-other-inc", inc.get("other", 0)),
     ]
 
@@ -52,6 +51,7 @@ def layout():
         ("Food & Groceries", "budget-food", exp.get("food", 0)),
         ("Transport", "budget-transport", exp.get("transport", 0)),
         ("Entertainment", "budget-entertainment", exp.get("entertainment", 0)),
+        ("Leibrente", "budget-leibrente", exp.get("leibrente", 1200)),
         ("Taxes", "budget-taxes", exp.get("taxes", 0)),
         ("Other Expenses", "budget-other-exp", exp.get("other", 0)),
     ]
@@ -88,25 +88,25 @@ def layout():
     ])
 
 def register_callbacks(app):
-    income_ids = ["budget-salary", "budget-side", "budget-dividends", "budget-leibrente", "budget-other-inc"]
+    income_ids = ["budget-salary", "budget-side", "budget-dividends", "budget-other-inc"]
     expense_ids = ["budget-rent", "budget-utilities", "budget-insurance",
                    "budget-gebaeude", "budget-hausneben", "budget-serafe",
                    "budget-phone", "budget-claude", "budget-spotify",
                    "budget-food", "budget-transport", "budget-entertainment",
-                   "budget-taxes", "budget-other-exp"]
+                   "budget-leibrente", "budget-taxes", "budget-other-exp"]
 
     @app.callback(
         [Output("budget-kpis", "children"),
          Output("budget-charts", "children")],
         [Input(id_, "value") for id_ in income_ids + expense_ids]
     )
-    def update_budget(salary, side, dividends, leibrente, other_inc,
+    def update_budget(salary, side, dividends, other_inc,
                       rent, utilities, insurance, gebaeude, hausneben, serafe,
-                      phone, claude, spotify, food, transport, entertainment, taxes, other_exp):
+                      phone, claude, spotify, food, transport, entertainment,
+                      leibrente, taxes, other_exp):
         salary = salary or 0
         side = side or 0
         dividends = dividends or 0
-        leibrente = leibrente or 0
         other_inc = other_inc or 0
         rent = rent or 0
         utilities = utilities or 0
@@ -120,25 +120,26 @@ def register_callbacks(app):
         food = food or 0
         transport = transport or 0
         entertainment = entertainment or 0
+        leibrente = leibrente or 0
         taxes = taxes or 0
         other_exp = other_exp or 0
 
         # Persist
         user_settings.save({"budget": {
-            "income": {"salary": salary, "side": side, "dividends": dividends, "leibrente": leibrente, "other": other_inc},
+            "income": {"salary": salary, "side": side, "dividends": dividends, "other": other_inc},
             "expenses": {"rent": rent, "utilities": utilities, "insurance": insurance,
                          "gebaeude": gebaeude, "hausneben": hausneben, "serafe": serafe,
                          "phone": phone, "claude": claude, "spotify": spotify,
                          "food": food, "transport": transport, "entertainment": entertainment,
-                         "taxes": taxes, "other": other_exp},
+                         "leibrente": leibrente, "taxes": taxes, "other": other_exp},
         }})
 
-        incomes = {"Salary": salary, "Side Income": side, "Dividends": dividends, "Leibrente": leibrente, "Other Income": other_inc}
+        incomes = {"Salary": salary, "Side Income": side, "Dividends": dividends, "Other Income": other_inc}
         expenses = {"Rent": rent, "Utilities": utilities, "Health Insurance": insurance,
                     "Gebäudeversicherung": gebaeude, "Hausnebenkosten": hausneben, "SERAFE": serafe,
                     "Phone": phone, "Claude": claude, "Spotify": spotify,
                     "Food & Groceries": food, "Transport": transport, "Entertainment": entertainment,
-                    "Taxes": taxes, "Other": other_exp}
+                    "Leibrente": leibrente, "Taxes": taxes, "Other": other_exp}
 
         total_income = sum(incomes.values())
         total_expenses = sum(expenses.values())
