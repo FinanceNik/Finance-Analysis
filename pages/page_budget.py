@@ -42,6 +42,12 @@ def layout():
         ("Rent", "budget-rent", exp.get("rent", 1680)),
         ("Utilities", "budget-utilities", exp.get("utilities", 25)),
         ("Health Insurance", "budget-insurance", exp.get("insurance", 320)),
+        ("Gebäudeversicherung", "budget-gebaeude", exp.get("gebaeude", 0)),
+        ("Hausnebenkosten", "budget-hausneben", exp.get("hausneben", 0)),
+        ("SERAFE", "budget-serafe", exp.get("serafe", 0)),
+        ("Phone Contract", "budget-phone", exp.get("phone", 0)),
+        ("Claude", "budget-claude", exp.get("claude", 0)),
+        ("Spotify", "budget-spotify", exp.get("spotify", 0)),
         ("Food & Groceries", "budget-food", exp.get("food", 0)),
         ("Transport", "budget-transport", exp.get("transport", 0)),
         ("Entertainment", "budget-entertainment", exp.get("entertainment", 0)),
@@ -69,7 +75,7 @@ def layout():
 
         html.Div([
             html.H5("Monthly Expenses"),
-            html.Div(_input_row(expense_fields, "18%")),
+            html.Div(_input_row(expense_fields, "14%")),
         ], style={"marginBottom": "10px"}),
 
         dcc.Loading(
@@ -82,8 +88,11 @@ def layout():
 
 def register_callbacks(app):
     income_ids = ["budget-salary", "budget-side", "budget-dividends", "budget-other-inc"]
-    expense_ids = ["budget-rent", "budget-utilities", "budget-insurance", "budget-food",
-                   "budget-transport", "budget-entertainment", "budget-taxes", "budget-other-exp"]
+    expense_ids = ["budget-rent", "budget-utilities", "budget-insurance",
+                   "budget-gebaeude", "budget-hausneben", "budget-serafe",
+                   "budget-phone", "budget-claude", "budget-spotify",
+                   "budget-food", "budget-transport", "budget-entertainment",
+                   "budget-taxes", "budget-other-exp"]
 
     @app.callback(
         [Output("budget-kpis", "children"),
@@ -91,7 +100,8 @@ def register_callbacks(app):
         [Input(id_, "value") for id_ in income_ids + expense_ids]
     )
     def update_budget(salary, side, dividends, other_inc,
-                      rent, utilities, insurance, food, transport, entertainment, taxes, other_exp):
+                      rent, utilities, insurance, gebaeude, hausneben, serafe,
+                      phone, claude, spotify, food, transport, entertainment, taxes, other_exp):
         salary = salary or 0
         side = side or 0
         dividends = dividends or 0
@@ -99,6 +109,12 @@ def register_callbacks(app):
         rent = rent or 0
         utilities = utilities or 0
         insurance = insurance or 0
+        gebaeude = gebaeude or 0
+        hausneben = hausneben or 0
+        serafe = serafe or 0
+        phone = phone or 0
+        claude = claude or 0
+        spotify = spotify or 0
         food = food or 0
         transport = transport or 0
         entertainment = entertainment or 0
@@ -109,12 +125,16 @@ def register_callbacks(app):
         user_settings.save({"budget": {
             "income": {"salary": salary, "side": side, "dividends": dividends, "other": other_inc},
             "expenses": {"rent": rent, "utilities": utilities, "insurance": insurance,
+                         "gebaeude": gebaeude, "hausneben": hausneben, "serafe": serafe,
+                         "phone": phone, "claude": claude, "spotify": spotify,
                          "food": food, "transport": transport, "entertainment": entertainment,
                          "taxes": taxes, "other": other_exp},
         }})
 
         incomes = {"Salary": salary, "Side Income": side, "Dividends": dividends, "Other Income": other_inc}
         expenses = {"Rent": rent, "Utilities": utilities, "Health Insurance": insurance,
+                    "Gebäudeversicherung": gebaeude, "Hausnebenkosten": hausneben, "SERAFE": serafe,
+                    "Phone": phone, "Claude": claude, "Spotify": spotify,
                     "Food & Groceries": food, "Transport": transport, "Entertainment": entertainment,
                     "Taxes": taxes, "Other": other_exp}
 
