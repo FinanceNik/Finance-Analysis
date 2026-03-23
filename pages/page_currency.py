@@ -3,7 +3,6 @@ import Styles
 import dataLoadPositions as dlp
 from dash import dcc, html, dash_table
 
-
 def _compute_currency_exposure():
     """Compute currency-level aggregation and concentration metrics.
 
@@ -56,13 +55,11 @@ def _compute_currency_exposure():
 
     return df, by_ccy, metrics
 
-
 def layout():
     df, by_ccy, metrics = _compute_currency_exposure()
 
     if df.empty or not metrics:
         return html.Div([
-            html.Hr(),
             html.H4("No position data available."),
         ])
 
@@ -88,7 +85,7 @@ def layout():
             f"{metrics['hhi']:.3f}",
             Styles.colorPalette[3],
         ),
-    ])
+    ], className="kpi-row")
 
     # ── Donut chart: currency allocation ──
     donut_chart = {
@@ -156,33 +153,36 @@ def layout():
         sort_action="native",
         filter_action="native",
         page_size=20,
+        export_format="csv",
+        export_headers="display",
         style_table={"overflowX": "auto"},
         style_cell={"padding": "8px", "textAlign": "left", "fontSize": "14px"},
         style_header={
+            "backgroundColor": Styles.colorPalette[0],
+            "color": "white",
             "fontWeight": "bold",
             "fontSize": "14px",
             "fontFamily": Styles.GRAPH_LAYOUT["font"]["family"],
         },
         style_data_conditional=[
-            {"if": {"row_index": "odd"}, "backgroundColor": "#f9f9f9"},
+            {"if": {"row_index": "odd"}, "backgroundColor": "var(--table-stripe, #f9f9f9)"},
         ],
     )
 
     # ── Assemble layout ──
     return html.Div([
-        html.Hr(),
         html.H4("Currency Exposure Analysis"),
         kpi_row,
-        html.Hr(),
 
         # Donut + Bar side by side
         html.Div([
-            dcc.Graph(id="currency-donut-chart", figure=donut_chart)
-        ], className="card"),
-        html.Div([
-            dcc.Graph(id="currency-bar-chart", figure=bar_chart)
-        ], className="card"),
-        html.Hr(),
+            html.Div([
+                dcc.Graph(id="currency-donut-chart", figure=donut_chart)
+            ], className="card"),
+            html.Div([
+                dcc.Graph(id="currency-bar-chart", figure=bar_chart)
+            ], className="card"),
+        ], className="grid-2"),
 
         # Table (full width)
         html.Div([

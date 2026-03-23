@@ -1,7 +1,6 @@
 import logging
 import pandas as pd
 import yfinance as yf
-import numpy as np
 from functools import lru_cache
 import config
 
@@ -97,10 +96,9 @@ def fetch_historical_data_yfinance():
     combined_df = combined_df.groupby(combined_df.index).first()
     combined_df = combined_df.sort_index()
 
-    combined_df_log = np.log10(combined_df + 1e-9)  # Add small value to avoid log(0)
-    combined_df_log.index = combined_df_log.index.strftime("%Y-%m-%d")
-    combined_df_log.index.name = "date"
-    combined_df_log.to_csv("data/historical_data.csv", index=True)
+    combined_df.index = combined_df.index.strftime("%Y-%m-%d")
+    combined_df.index.name = "date"
+    combined_df.to_csv("data/historical_data.csv", index=True)
 
 
 def fetch_macro_data():

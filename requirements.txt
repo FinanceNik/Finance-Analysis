@@ -5,3 +5,5 @@ plotly==5.18.0
 numpy==2.3.5
 yfinance==0.2.66
 xlrd
+pytest
+pytest-timeout

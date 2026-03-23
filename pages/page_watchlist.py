@@ -1,3 +1,4 @@
+import re
 import time
 import logging
 import Styles
@@ -122,8 +123,15 @@ def register_callbacks(app):
         # ── Handle Add button or Enter key ──
         if trigger_id in ("watchlist-add-btn", "watchlist-input"):
             if not input_value or not input_value.strip():
-                return current_list, "", "Please enter a ticker symbol."
+                return current_list, "", html.Span(
+                    "Please enter a ticker symbol.",
+                    style={"color": Styles.strongRed})
             symbol = input_value.strip().upper()
+            # Validate: alphanumeric, hyphens, dots, carets allowed (e.g. BTC-USD, ^VIX, BRK.B)
+            if not re.match(r'^[A-Z0-9\.\^\-]{1,12}$', symbol):
+                return current_list, "", html.Span(
+                    "Invalid ticker. Use letters, numbers, hyphens only (e.g. AAPL, BTC-USD).",
+                    style={"color": Styles.strongRed})
             if symbol in [s.upper() for s in current_list]:
                 return current_list, "", f"{symbol} is already in your watchlist."
             new_list = current_list + [symbol]

@@ -52,16 +52,11 @@ def _build_kpi_row(dividends):
         yoy_growth = 0
 
     # Portfolio yield (TTM dividends / total market value)
-    # Only include dividends from symbols that are currently held
     weighted_yield = 0
     positions = dlp.fetch_data()
     if not positions.empty and "total_value" in positions.columns:
         ttm_start = today - timedelta(days=365)
-        current_symbols = set(positions["symbol"].unique())
-        ttm_divs = dividends[
-            (dividends["date"] >= ttm_start) & (dividends["symbol"].isin(current_symbols))
-        ]
-        ttm_total = ttm_divs["amount"].sum()
+        ttm_total = dividends[dividends["date"] >= ttm_start]["amount"].sum()
         portfolio_mv = positions["total_value"].sum()
         if portfolio_mv > 0:
             weighted_yield = ttm_total / portfolio_mv * 100
@@ -451,6 +446,8 @@ def _build_symbol_table(dividends):
             style_table={"overflowX": "auto", "overflowY": "auto", "maxHeight": "500px"},
             style_cell={"padding": "8px", "textAlign": "left", "fontSize": "13px"},
             style_header={
+                "backgroundColor": Styles.colorPalette[0],
+                "color": "white",
                 "fontWeight": "bold",
                 "fontSize": "13px",
                 "fontFamily": Styles.GRAPH_LAYOUT["font"]["family"],

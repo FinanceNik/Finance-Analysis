@@ -7,15 +7,7 @@ import config
 import dataLoadPositions as dlp
 import dataLoadTransactions as dlt
 import user_settings
-
-
-def _load_symbol_mapping():
-    """Load broker-symbol to Yahoo-ticker mapping from mapping.csv."""
-    try:
-        mapping = pd.read_csv("data/mapping.csv", sep=",")
-        return dict(zip(mapping["symbol"], mapping["ticker"]))
-    except Exception:
-        return {}
+from utils import load_symbol_mapping
 
 def _fmt_currency(value):
     """Format a numeric value as a readable currency string."""
@@ -240,14 +232,12 @@ def _build_performance_chart():
             'layout': Styles.graph_layout(title='Performance Overview'),
         }
 
-    # Apply 10**values transform (data is stored in log scale)
     if "date" in hist.columns:
         data_cols = [c for c in hist.columns if c != "date"]
     else:
         data_cols = list(hist.columns)
 
-    # Transform from log scale to actual values
-    price_data = hist[data_cols].apply(lambda col: 10 ** col)
+    price_data = hist[data_cols]
 
     # Consolidate duplicate dates from outer-joined exchanges
     if "date" in hist.columns:
@@ -259,7 +249,7 @@ def _build_performance_chart():
         dates = hist.index.tolist()
 
     # Build symbol mapping: broker symbol -> Yahoo ticker and reverse
-    sym_to_ticker = _load_symbol_mapping()
+    sym_to_ticker = load_symbol_mapping()
     ticker_to_sym = {v: k for k, v in sym_to_ticker.items() if v}
 
     # Separate benchmark columns from portfolio holdings
@@ -267,61 +257,15 @@ def _build_performance_chart():
     holding_cols = [c for c in data_cols if c not in bench_tickers]
     bench_cols = [c for c in bench_tickers if c in data_cols]
 
-    # BUG 9 FIX: Use a common start date so all series are comparable
-    all_cols = holding_cols + bench_cols
-    first_valid_indices = []
-    for c in all_cols:
-        fvi = price_data[c].first_valid_index()
-        if fvi is not None:
-            first_valid_indices.append(fvi)
-    if first_valid_indices:
-        common_start = max(first_valid_indices)
-        price_data = price_data.loc[common_start:]
-        dates = price_data.index.tolist()
-
-    # Normalize to 100 at the first valid value for each series (now from common start)
+    # Normalize to 100 at the first valid value for each series
     first_valid = price_data.apply(lambda s: s.dropna().iloc[0] if not s.dropna().empty else np.nan)
     normalized = (price_data / first_valid) * 100
 
-    # BUG 2 FIX: Forward-fill normalized data to prevent NaN gaps causing jumps
-    normalized = normalized.ffill()
-
-    # BUG 4 FIX: Value-weighted portfolio average using position market values
-    portfolio_avg = None
+    # Portfolio average from holdings only (exclude benchmarks)
     if holding_cols:
-        try:
-            pos_df = dlp.fetch_data()
-            if not pos_df.empty and 'symbol' in pos_df.columns:
-                val_col = 'base_value' if 'base_value' in pos_df.columns else 'total_value'
-                if val_col in pos_df.columns:
-                    pos_df = pos_df.dropna(subset=[val_col])
-                    total_mv = pos_df[val_col].sum()
-                    if total_mv > 0:
-                        # Map broker symbols to tickers
-                        sym_map = _load_symbol_mapping()
-                        weights = {}
-                        for _, row in pos_df.iterrows():
-                            sym = row['symbol']
-                            ticker = sym_map.get(sym, sym)
-                            if ticker in holding_cols:
-                                w = row[val_col] / total_mv
-                                weights[ticker] = weights.get(ticker, 0) + w
-                        if weights:
-                            # Compute weighted average
-                            weighted = pd.Series(0.0, index=normalized.index)
-                            total_w = sum(weights.values())
-                            for col, w in weights.items():
-                                weighted += normalized[col].fillna(method='ffill').fillna(100) * (w / total_w)
-                            portfolio_avg = weighted.dropna()
-        except Exception:
-            pass  # Fall back to equal weight below
-
-    # Fallback: equal-weighted average
-    if portfolio_avg is None:
-        if holding_cols:
-            portfolio_avg = normalized[holding_cols].mean(axis=1).dropna()
-        else:
-            portfolio_avg = normalized.mean(axis=1).dropna()
+        portfolio_avg = normalized[holding_cols].mean(axis=1).dropna()
+    else:
+        portfolio_avg = normalized.mean(axis=1).dropna()
 
     traces = [{
         'x': dates,
@@ -422,12 +366,7 @@ def _get_portfolio_sparkline():
             return None
         hist = hist.reset_index()
         data_cols = [c for c in hist.columns if c != "date"]
-        # BUG 5 FIX: Exclude benchmark columns from sparkline
-        bench_tickers = set(config.BENCHMARK_TICKERS) | set(config.BLENDED_BENCHMARK.keys())
-        holding_cols = [c for c in data_cols if c not in bench_tickers]
-        if not holding_cols:
-            return None
-        prices = hist[holding_cols].apply(lambda col: 10 ** col)
+        prices = hist[data_cols]
         # Consolidate duplicate dates from outer-joined exchanges
         if "date" in hist.columns:
             prices.index = hist["date"]
@@ -487,7 +426,7 @@ def layout():
             html.Div([
                 Styles.kpiboxes_spark("Net Worth", _fmt_currency(net_worth), Styles.colorPalette[0]),
                 Styles.kpiboxes_spark("Portfolio Value", _fmt_currency(portfolio_value), Styles.colorPalette[1], portfolio_spark),
-                Styles.kpiboxes_spark("Total Return", f"{return_pct:.1%}", return_color),
+                Styles.kpiboxes_spark("YTD Return", f"{return_pct:.1%}", return_color),
                 Styles.kpiboxes_spark("Monthly Savings", _fmt_currency(monthly_savings), savings_color, dividend_spark),
             ], className="kpi-row"),
 

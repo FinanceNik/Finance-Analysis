@@ -33,7 +33,7 @@ jobs:
           if errors:
               for e in errors: print(e)
               sys.exit(1)
-          print(f'All {len(glob.glob(\"*.py\") + glob.glob(\"pages/*.py\"))} files pass syntax check')
+          print(f'All files pass syntax check')
           "
 
       - name: Verify page count
@@ -44,6 +44,10 @@ jobs:
           print(f'Found {len(pages)} page modules')
           assert len(pages) >= 25, f'Expected 25+ pages, found {len(pages)}'
           "
+
+      - name: Run smoke tests
+        run: python -m pytest tests/ -v --timeout=60 -x
+        continue-on-error: true
 
   docker-build:
     runs-on: ubuntu-latest

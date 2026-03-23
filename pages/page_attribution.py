@@ -15,6 +15,7 @@ from dash import dcc, html, Input, Output
 import Styles
 import config
 import dataLoadPositions as dlp
+from utils import load_symbol_mapping
 
 
 # ── Approximate S&P 500 sector weights (SPY benchmark) ──
@@ -34,15 +35,6 @@ _SPY_SECTOR_WEIGHTS = {
 
 # Sectors in the portfolio that don't exist in SPY
 _NON_SPY_SECTORS = {"Crypto", "Diversified"}
-
-
-def _load_symbol_mapping() -> dict:
-    """Load broker-symbol to Yahoo-ticker mapping from mapping.csv."""
-    try:
-        mapping = pd.read_csv("data/mapping.csv", sep=",")
-        return dict(zip(mapping["symbol"], mapping["ticker"]))
-    except Exception:
-        return {}
 
 
 def _resolve_symbol(sym, available_cols, sym_to_ticker=None):
@@ -76,8 +68,8 @@ def _compute_attribution():
 
     df["weight"] = df["market_value"] / total_mv
 
-    # Map each holding to its sector (manual overrides + yfinance auto-lookup)
-    df["sector"] = df["symbol"].map(config.get_sector).fillna("Other")
+    # Map each holding to its sector via config.SECTOR_MAP
+    df["sector"] = df["symbol"].map(config.SECTOR_MAP).fillna("Other")
 
     # ── Per-holding return from cost basis ──
     df["holding_return"] = df["pnl_pct"].fillna(0.0)
@@ -175,11 +167,10 @@ def _estimate_benchmark_returns():
         hist = dlp.load_historical_data().reset_index()
         if "date" in hist.columns:
             hist = hist.set_index("date")
-        hist = 10 ** hist
         hist = hist.groupby(hist.index).first().sort_index().ffill()
 
         # Use SPY as benchmark total return proxy
-        sym_to_ticker = _load_symbol_mapping()
+        sym_to_ticker = load_symbol_mapping()
         spy_col = _resolve_symbol("SPY", hist.columns, sym_to_ticker)
         if spy_col and spy_col in hist.columns:
             spy_prices = hist[spy_col].dropna()

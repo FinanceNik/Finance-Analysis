@@ -1,3 +1,6 @@
+import os
+import time
+
 import pandas as pd
 import config
 
@@ -61,3 +64,51 @@ def format_currency(value: float, currency: str | None = None) -> str:
     if len(symbol) > 1:
         return f"{symbol} {formatted}"
     return f"{symbol}{formatted}"
+
+
+# ── Symbol mapping ──────────────────────────────────────────────────
+
+
+def load_symbol_mapping():
+    """Load broker symbol -> Yahoo ticker mapping from data/mapping.csv."""
+    path = os.path.join("data", "mapping.csv")
+    if not os.path.exists(path):
+        return {}
+    try:
+        mapping = pd.read_csv(path)
+        mapping = standardize_columns(mapping)
+        return dict(zip(mapping["symbol"], mapping["ticker"]))
+    except Exception:
+        return {}
+
+
+# ── yfinance cache ──────────────────────────────────────────────────
+
+_yf_cache = {}
+_YF_TTL = 300  # 5 minutes
+
+
+def yf_cached_info(ticker):
+    """Fetch yfinance .info with 5-minute cache."""
+    now = time.time()
+    key = f"info:{ticker}"
+    if key in _yf_cache and now - _yf_cache[key][1] < _YF_TTL:
+        return _yf_cache[key][0]
+    try:
+        import yfinance as yf
+        info = yf.Ticker(ticker).info
+        _yf_cache[key] = (info, now)
+        return info
+    except Exception:
+        return {}
+
+
+def yf_cached_price(ticker):
+    """Fetch current price with 5-minute cache."""
+    info = yf_cached_info(ticker)
+    return info.get("currentPrice", info.get("regularMarketPrice", None))
+
+
+def clear_yf_cache():
+    """Clear the yfinance cache (called on Refresh)."""
+    _yf_cache.clear()

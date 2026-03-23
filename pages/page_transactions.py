@@ -32,7 +32,6 @@ def layout():
 
         html.Div([
             html.Div([
-                html.H5("Monthly Net Contributions"),
                 dcc.Graph(
                     id='monthly-investment-comparison-bar',
                     figure={
@@ -61,7 +60,7 @@ def layout():
                         ],
                         'layout': Styles.graph_layout(
                             barmode='group',
-                            title='',
+                            title='Monthly Net Contributions',
                             xaxis={'title': 'Month'},
                             yaxis={'title': 'Net Contributions'},
                         )
@@ -69,7 +68,6 @@ def layout():
                 )
             ], className="card"),
             html.Div([
-                html.H5("Yearly Net Contributions"),
                 dcc.Graph(
                     id='yearly-investment-bar',
                     figure={
@@ -81,7 +79,7 @@ def layout():
                             'name': 'Yearly Net Contributions',
                         }],
                         'layout': Styles.graph_layout(
-                            title='',
+                            title='Yearly Net Contributions',
                             xaxis={'title': 'Year'},
                             yaxis={'title': 'Net Contributions'},
                         )
@@ -91,7 +89,6 @@ def layout():
         ], className="grid-80-20"),
 
         html.Div([
-            html.H5("Cumulative Net Contributions"),
             dcc.Graph(
                 id='cumulative-net-contributions',
                 figure=_cumulative_contributions_figure()
@@ -132,6 +129,8 @@ def _build_transactions_table():
         style_table={"overflowX": "auto", "overflowY": "auto", "maxHeight": "600px"},
         style_cell={"padding": "8px", "textAlign": "left", "fontSize": "13px"},
         style_header={
+            "backgroundColor": Styles.colorPalette[0],
+            "color": "white",
             "fontWeight": "bold",
             "fontSize": "13px",
             "fontFamily": Styles.GRAPH_LAYOUT["font"]["family"],
@@ -148,7 +147,7 @@ def _cumulative_contributions_figure():
     df = dlt.ingest_transactions()
     if df.empty:
         return {'data': [], 'layout': Styles.graph_layout(
-            title='')}
+            title='Cumulative Net Contributions')}
 
     contrib = df.loc[df['transaction'].str.lower().isin(['buy', 'sell'])].copy()
     contrib['period'] = contrib['date'].dt.to_period('M')
@@ -175,7 +174,7 @@ def _cumulative_contributions_figure():
             'line': {'color': Styles.colorPalette[0]},
         }],
         'layout': Styles.graph_layout(
-            title='',
+            title='Cumulative Net Contributions',
             xaxis={'title': 'Month'},
             yaxis={'title': 'Cumulative Amount'},
         )

@@ -1,405 +1,130 @@
-"""Position Sizing Calculator – suggests how many shares to buy based on
-portfolio constraints, volatility, and correlation with existing holdings."""
-
-import time
-import numpy as np
-import pandas as pd
-import yfinance as yf
-from dash import dcc, html, Input, Output, State
+"""Position Sizing Calculator — Kelly Criterion & fixed-fraction helpers."""
+import re
+import logging
 import Styles
-import dataLoadPositions as dlp
+import yfinance as yf
+from dash import dcc, html, Input, Output, State, callback_context
+from dash.exceptions import PreventUpdate
 
-# ── Simple in-memory cache for yfinance lookups ──
-_yf_cache: dict = {}
-_YF_TTL = 300  # seconds
-
-
-def _fetch_ticker_info(ticker: str) -> dict | None:
-    """Fetch current price and 1-year daily history for *ticker* (cached 5 min)."""
-    ticker = ticker.strip().upper()
-    now = time.time()
-    if ticker in _yf_cache and now - _yf_cache[ticker]["ts"] < _YF_TTL:
-        return _yf_cache[ticker]["data"]
-    try:
-        t = yf.Ticker(ticker)
-        hist = t.history(period="1y")
-        if hist.empty:
-            return None
-        price = float(hist["Close"].iloc[-1])
-        data = {"price": price, "history": hist["Close"]}
-        _yf_cache[ticker] = {"ts": now, "data": data}
-        return data
-    except Exception:
-        return None
+logger = logging.getLogger(__name__)
 
 
-def _load_symbol_mapping() -> dict:
-    try:
-        mapping = pd.read_csv("data/mapping.csv", sep=",")
-        return dict(zip(mapping["symbol"], mapping["ticker"]))
-    except Exception:
-        return {}
-
-
-def _resolve_symbol(sym, available_cols, sym_to_ticker=None):
-    if sym in available_cols:
-        return sym
-    if sym_to_ticker and sym_to_ticker.get(sym) and sym_to_ticker[sym] in available_cols:
-        return sym_to_ticker[sym]
-    matches = [c for c in available_cols if c.startswith(sym)]
-    return matches[0] if matches else None
-
-
-def _portfolio_vol_and_returns():
-    """Return annualised portfolio volatility, per-holding daily returns DataFrame,
-    and a weight Series keyed by historical-data column name."""
-    df = dlp.add_position_pnl_columns()
-    if df.empty:
-        return None, pd.DataFrame(), pd.Series(dtype=float)
-
-    total_mv = df["market_value"].sum()
-    df["weight"] = df["market_value"] / total_mv
-
-    try:
-        hist = dlp.load_historical_data().reset_index()
-        if "date" in hist.columns:
-            hist = hist.set_index("date")
-        hist = 10 ** hist
-        hist = hist.groupby(hist.index).first().sort_index().ffill()
-    except Exception:
-        return None, pd.DataFrame(), pd.Series(dtype=float)
-
-    sym_to_ticker = _load_symbol_mapping()
-    holding_weights = {}
-    for _, row in df.iterrows():
-        sym = row.get("symbol", "")
-        w = row.get("weight", 0)
-        col = _resolve_symbol(sym, hist.columns, sym_to_ticker)
-        if col:
-            holding_weights[col] = holding_weights.get(col, 0) + w
-
-    if not holding_weights:
-        return None, pd.DataFrame(), pd.Series(dtype=float)
-
-    matched_cols = list(holding_weights.keys())
-    weights_s = pd.Series(holding_weights)
-    weights_s = weights_s / weights_s.sum()
-
-    subset = hist[matched_cols].dropna()
-    daily_returns = subset.pct_change().iloc[1:]
-    port_daily = (daily_returns * weights_s).sum(axis=1)
-    port_vol = float(port_daily.std() * np.sqrt(252))
-
-    return port_vol, daily_returns, weights_s
-
-
-# ────────────────────────────────────────────────────────────
-# Layout
-# ────────────────────────────────────────────────────────────
 def layout():
     return html.Div([
-        html.H4("Position Sizing Calculator"),
+        html.Div([
+            html.H4("Position Sizing Calculator"),
+            html.P("Estimate optimal position size using the Kelly Criterion.",
+                   className="page-subtitle"),
+        ], className="page-header"),
 
-        # ── Input section ──
         html.Div([
             html.Div([
                 html.Label("Ticker Symbol"),
-                dcc.Input(
-                    id="sizing-ticker", type="text", placeholder="e.g. AAPL",
-                    debounce=True,
-                    style={"width": "120px", "padding": "6px 10px"},
-                ),
-            ], style={"display": "inline-block", "marginRight": "24px"}),
-
+                dcc.Input(id="sizing-ticker", type="text",
+                          placeholder="e.g. AAPL", debounce=True,
+                          style={"width": "180px", "padding": "8px 12px",
+                                 "borderRadius": "8px", "border": "1px solid #ccc"}),
+            ], style={"marginRight": "20px"}),
             html.Div([
                 html.Label("Available Cash"),
-                dcc.Input(
-                    id="sizing-cash", type="number",
-                    placeholder="10000", min=0,
-                    style={"width": "140px", "padding": "6px 10px"},
-                ),
-            ], style={"display": "inline-block", "marginRight": "24px"}),
-
+                dcc.Input(id="sizing-cash", type="number",
+                          placeholder="e.g. 10000", min=0,
+                          style={"width": "180px", "padding": "8px 12px",
+                                 "borderRadius": "8px", "border": "1px solid #ccc"}),
+            ], style={"marginRight": "20px"}),
             html.Div([
-                html.Label("Max Position Size (% of portfolio)"),
-                dcc.Slider(
-                    id="sizing-max-pct", min=1, max=25, step=0.5, value=5,
-                    marks={i: f"{i}%" for i in [1, 5, 10, 15, 20, 25]},
-                    tooltip={"placement": "bottom", "always_visible": True},
-                ),
-            ], style={"display": "inline-block", "width": "300px",
-                       "verticalAlign": "top", "marginRight": "24px"}),
+                html.Label("Win Probability (%)"),
+                dcc.Input(id="sizing-win-prob", type="number",
+                          value=55, min=1, max=99,
+                          style={"width": "120px", "padding": "8px 12px",
+                                 "borderRadius": "8px", "border": "1px solid #ccc"}),
+            ], style={"marginRight": "20px"}),
+            html.Button("Calculate", id="sizing-calc-btn", n_clicks=0,
+                        className="header-btn",
+                        style={"alignSelf": "flex-end", "padding": "8px 20px"}),
+        ], style={"display": "flex", "alignItems": "flex-end", "gap": "8px",
+                  "padding": "10px 15px", "flexWrap": "wrap"}),
 
-            html.Div([
-                html.Label("Risk Tolerance"),
-                dcc.Dropdown(
-                    id="sizing-risk",
-                    options=[
-                        {"label": "Conservative (2%)", "value": 0.02},
-                        {"label": "Moderate (5%)", "value": 0.05},
-                        {"label": "Aggressive (10%)", "value": 0.10},
-                    ],
-                    value=0.05, clearable=False,
-                    style={"width": "220px"},
-                ),
-            ], style={"display": "inline-block", "verticalAlign": "top"}),
-        ], className="card", style={"padding": "20px", "marginBottom": "16px"}),
+        # Feedback / validation messages
+        html.Div(id="sizing-feedback",
+                 style={"padding": "0 15px", "fontSize": "13px", "minHeight": "20px"}),
 
-        # ── Results (callback-driven) ──
-        dcc.Loading(
-            html.Div(id="sizing-results", children=html.Div([
-                Styles.skeleton_kpis(4),
-                html.Div([Styles.skeleton_chart(), Styles.skeleton_chart()],
-                          className="grid-2"),
-            ])),
-            type="dot",
-        ),
+        # Results area
+        html.Div(id="sizing-results", style={"padding": "10px 15px"}),
     ])
 
 
-# ────────────────────────────────────────────────────────────
-# Callbacks
-# ────────────────────────────────────────────────────────────
 def register_callbacks(app):
-
     @app.callback(
-        Output("sizing-results", "children"),
-        [Input("sizing-ticker", "value"),
-         Input("sizing-cash", "value"),
-         Input("sizing-max-pct", "value"),
-         Input("sizing-risk", "value")],
+        [Output("sizing-results", "children"),
+         Output("sizing-feedback", "children")],
+        [Input("sizing-calc-btn", "n_clicks")],
+        [State("sizing-ticker", "value"),
+         State("sizing-cash", "value"),
+         State("sizing-win-prob", "value")],
+        prevent_initial_call=True,
     )
-    def update_sizing(ticker, cash, max_pct, risk_pct):
+    def calculate_sizing(n_clicks, ticker, cash, win_prob):
+        if not n_clicks:
+            raise PreventUpdate
+
+        # ── Input validation ──
         if not ticker or not ticker.strip():
-            return html.P("Enter a ticker symbol above to begin.",
-                          style={"padding": "20px", "opacity": 0.6})
+            return "", html.Span("Please enter a ticker symbol.",
+                                 style={"color": Styles.strongRed})
 
         ticker = ticker.strip().upper()
+        if not re.match(r'^[A-Z0-9\.\^\-]{1,12}$', ticker):
+            return "", html.Span("Invalid ticker format.",
+                                 style={"color": Styles.strongRed})
 
-        # ── Fetch ticker data ──
-        info = _fetch_ticker_info(ticker)
-        if info is None:
-            return html.P(f"Could not fetch data for '{ticker}'. "
-                          "Check the symbol and try again.",
-                          style={"padding": "20px", "color": Styles.strongRed})
+        if cash is None or cash <= 0:
+            return "", html.Span("Available cash must be greater than 0.",
+                                 style={"color": Styles.strongRed})
 
-        price = info["price"]
-        new_hist = info["history"]
+        win_prob = win_prob or 55
+        win_prob = max(1, min(99, win_prob))
 
-        # ── Portfolio data ──
-        df = dlp.fetch_data()
-        total_value = dlp.portfolio_total_value() if not df.empty else 0
-        cash = cash if cash and cash > 0 else 0
+        # ── Fetch current price ──
+        try:
+            tk = yf.Ticker(ticker)
+            info = tk.info or {}
+            price = info.get("currentPrice") or info.get("regularMarketPrice")
+            if not price or price <= 0:
+                return "", html.Span(
+                    f"Ticker not found or no price data for {ticker}.",
+                    style={"color": Styles.strongRed})
+        except Exception as e:
+            logger.warning("Sizing lookup failed for %s: %s", ticker, e)
+            return "", html.Span(
+                f"Ticker not found: could not retrieve data for {ticker}.",
+                style={"color": Styles.strongRed})
 
-        if total_value == 0 and cash == 0:
-            return html.P("No portfolio data and no cash specified.",
-                          style={"padding": "20px"})
+        # ── Kelly Criterion ──
+        p = win_prob / 100.0
+        q = 1 - p
+        # Assume 1:1 risk/reward for simplicity
+        b = 1.0
+        kelly_fraction = (p * b - q) / b if b > 0 else 0
+        kelly_fraction = max(0, min(1, kelly_fraction))
 
-        effective_portfolio = total_value + cash
-        max_pct = max_pct if max_pct else 5
-        risk_pct = risk_pct if risk_pct else 0.05
+        # Half-Kelly (more conservative)
+        half_kelly = kelly_fraction / 2
+        position_value = cash * half_kelly
+        shares = int(position_value / price) if price > 0 else 0
 
-        # ── Constraint 1: max % of portfolio ──
-        max_dollar = effective_portfolio * (max_pct / 100)
-
-        # ── Portfolio volatility & correlations ──
-        port_vol, daily_returns, weights_s = _portfolio_vol_and_returns()
-
-        # New ticker daily returns (align to 1y)
-        new_returns = new_hist.pct_change().dropna()
-        new_vol = float(new_returns.std() * np.sqrt(252)) if len(new_returns) > 20 else None
-
-        # Correlation with each existing holding
-        correlations = {}
-        avg_correlation = 0.0
-        if not daily_returns.empty and len(new_returns) > 20:
-            for col in daily_returns.columns:
-                common = daily_returns[col].dropna()
-                merged = pd.concat([common, new_returns], axis=1, join="inner")
-                if len(merged) > 20:
-                    correlations[col] = float(merged.iloc[:, 0].corr(merged.iloc[:, 1]))
-            if correlations:
-                # Weight-averaged correlation
-                total_w = 0
-                weighted_corr = 0
-                for col, corr in correlations.items():
-                    w = weights_s.get(col, 0)
-                    weighted_corr += corr * w
-                    total_w += w
-                avg_correlation = weighted_corr / total_w if total_w > 0 else 0
-
-        # ── Constraint 2: volatility-adjusted sizing ──
-        # If new ticker is more volatile than portfolio, reduce allocation
-        vol_scalar = 1.0
-        if port_vol and new_vol and new_vol > 0:
-            vol_scalar = min(port_vol / new_vol, 1.0)
-
-        # ── Constraint 3: correlation penalty ──
-        # Lower correlation = can allocate more (diversification benefit)
-        corr_scalar = 1.0 - max(avg_correlation, 0) * 0.5  # 0.5..1.0
-
-        # ── Risk-based limit ──
-        risk_dollar = effective_portfolio * risk_pct
-
-        # ── Combine constraints ──
-        suggested_dollar = min(
-            max_dollar,
-            risk_dollar * vol_scalar * corr_scalar,
-            cash if cash > 0 else float("inf"),
-        )
-        suggested_dollar = max(suggested_dollar, 0)
-
-        suggested_shares = int(suggested_dollar // price) if price > 0 else 0
-        actual_dollar = suggested_shares * price
-        new_total = total_value + actual_dollar
-        pct_of_portfolio = (actual_dollar / new_total * 100) if new_total > 0 else 0
-
-        # ── New portfolio volatility estimate ──
-        new_port_vol = port_vol  # fallback
-        if port_vol is not None and new_vol is not None:
-            # Simple 2-asset approximation:
-            # w_new = actual_dollar / new_total
-            w_new = actual_dollar / new_total if new_total > 0 else 0
-            w_old = 1 - w_new
-            new_port_vol = np.sqrt(
-                (w_old * port_vol) ** 2
-                + (w_new * new_vol) ** 2
-                + 2 * w_old * w_new * port_vol * new_vol * avg_correlation
-            )
-
-        # ── KPIs ──
-        kpi_row = html.Div([
-            Styles.kpiboxes("Suggested Shares", suggested_shares, Styles.colorPalette[1]),
-            Styles.kpiboxes("Dollar Amount", f"${actual_dollar:,.0f}", Styles.colorPalette[0]),
-            Styles.kpiboxes(
-                "New Portfolio Vol",
-                f"{new_port_vol * 100:.1f}%" if new_port_vol is not None else "N/A",
-                Styles.colorPalette[2],
-            ),
-            Styles.kpiboxes(
-                "Correlation Score",
-                f"{avg_correlation:.2f}",
-                Styles.strongGreen if avg_correlation < 0.5 else Styles.strongRed,
-            ),
-        ], className="kpi-row")
-
-        # ── Before / After allocation pie charts ──
-        before_labels = []
-        before_values = []
-        if not df.empty and "symbol" in df.columns and "total_value" in df.columns:
-            grouped = df.groupby("symbol")["total_value"].sum().sort_values(ascending=False)
-            for sym, val in grouped.items():
-                before_labels.append(sym)
-                before_values.append(float(val))
-        if cash and cash > 0:
-            before_labels.append("Cash")
-            before_values.append(float(cash))
-
-        after_labels = list(before_labels)
-        after_values = list(before_values)
-        if ticker in after_labels:
-            idx = after_labels.index(ticker)
-            after_values[idx] += actual_dollar
-        else:
-            after_labels.append(ticker)
-            after_values.append(actual_dollar)
-        # Reduce cash by purchase amount
-        if "Cash" in after_labels:
-            ci = after_labels.index("Cash")
-            after_values[ci] = max(after_values[ci] - actual_dollar, 0)
-
-        pie_before = {
-            "data": [{
-                "type": "pie",
-                "labels": before_labels,
-                "values": before_values,
-                "hole": 0.45,
-                "textinfo": "label+percent",
-                "textposition": "outside",
-                "marker": {"colors": Styles.purple_list * 3},
-            }],
-            "layout": Styles.graph_layout(title="Before Purchase",
-                                          showlegend=False,
-                                          margin={"t": 40, "b": 20, "l": 20, "r": 20}),
-        }
-
-        pie_after = {
-            "data": [{
-                "type": "pie",
-                "labels": after_labels,
-                "values": after_values,
-                "hole": 0.45,
-                "textinfo": "label+percent",
-                "textposition": "outside",
-                "marker": {"colors": Styles.purple_list * 3},
-            }],
-            "layout": Styles.graph_layout(title="After Purchase",
-                                          showlegend=False,
-                                          margin={"t": 40, "b": 20, "l": 20, "r": 20}),
-        }
-
-        # ── Before / After portfolio volatility ──
-        vol_labels = ["Before", "After"]
-        vol_values = [
-            port_vol * 100 if port_vol else 0,
-            new_port_vol * 100 if new_port_vol else 0,
-        ]
-        vol_colors = [Styles.colorPalette[0], Styles.colorPalette[1]]
-
-        vol_chart = {
-            "data": [{
-                "type": "bar",
-                "x": vol_labels,
-                "y": [round(v, 2) for v in vol_values],
-                "marker": {"color": vol_colors},
-                "text": [f"{v:.2f}%" for v in vol_values],
-                "textposition": "outside",
-            }],
-            "layout": Styles.graph_layout(
-                title="Portfolio Volatility Impact",
-                yaxis={"title": "Annualised Volatility (%)"},
-            ),
-        }
-
-        # ── Correlation with top 5 holdings ──
-        top5_corr_labels = []
-        top5_corr_values = []
-        if correlations:
-            sorted_corr = sorted(correlations.items(),
-                                 key=lambda x: abs(x[1]), reverse=True)[:5]
-            for col, corr in sorted_corr:
-                top5_corr_labels.append(col)
-                top5_corr_values.append(round(corr, 3))
-
-        corr_colors = [
-            Styles.strongGreen if abs(c) < 0.5 else Styles.strongRed
-            for c in top5_corr_values
-        ]
-
-        corr_chart = {
-            "data": [{
-                "type": "bar",
-                "x": top5_corr_labels,
-                "y": top5_corr_values,
-                "marker": {"color": corr_colors},
-                "text": [f"{c:.2f}" for c in top5_corr_values],
-                "textposition": "outside",
-            }],
-            "layout": Styles.graph_layout(
-                title=f"Correlation of {ticker} with Top Holdings",
-                yaxis={"title": "Correlation", "range": [-1, 1]},
-            ),
-        }
-
-        # ── Assemble ──
-        return html.Div([
-            kpi_row,
+        results = html.Div([
             html.Div([
-                html.Div([dcc.Graph(figure=pie_before)], className="card"),
-                html.Div([dcc.Graph(figure=pie_after)], className="card"),
-            ], className="grid-2"),
+                Styles.kpiboxes("Current Price", f"${price:,.2f}", Styles.colorPalette[0]),
+                Styles.kpiboxes("Kelly %", f"{kelly_fraction * 100:.1f}%", Styles.colorPalette[1]),
+                Styles.kpiboxes("Half-Kelly %", f"{half_kelly * 100:.1f}%", Styles.colorPalette[2]),
+                Styles.kpiboxes("Shares to Buy", shares, Styles.colorPalette[3]),
+            ], className="kpi-row"),
             html.Div([
-                html.Div([dcc.Graph(figure=vol_chart)], className="card"),
-                html.Div([dcc.Graph(figure=corr_chart)], className="card"),
-            ], className="grid-2"),
+                html.P(f"With ${cash:,.0f} available and a {win_prob}% win probability, "
+                       f"the half-Kelly position size is ${position_value:,.0f} "
+                       f"({shares} shares of {ticker} at ${price:,.2f})."),
+            ], className="card", style={"padding": "16px", "marginTop": "12px"}),
         ])
+
+        return results, ""
