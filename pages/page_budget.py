@@ -35,6 +35,7 @@ def layout():
         ("Salary (Monthly)", "budget-salary", inc.get("salary", 9583)),
         ("Side Income", "budget-side", inc.get("side", 375)),
         ("Dividend Income", "budget-dividends", inc.get("dividends", 292)),
+        ("Leibrente", "budget-leibrente", inc.get("leibrente", 1200)),
         ("Other Income", "budget-other-inc", inc.get("other", 0)),
     ]
 
@@ -87,7 +88,7 @@ def layout():
     ])
 
 def register_callbacks(app):
-    income_ids = ["budget-salary", "budget-side", "budget-dividends", "budget-other-inc"]
+    income_ids = ["budget-salary", "budget-side", "budget-dividends", "budget-leibrente", "budget-other-inc"]
     expense_ids = ["budget-rent", "budget-utilities", "budget-insurance",
                    "budget-gebaeude", "budget-hausneben", "budget-serafe",
                    "budget-phone", "budget-claude", "budget-spotify",
@@ -99,12 +100,13 @@ def register_callbacks(app):
          Output("budget-charts", "children")],
         [Input(id_, "value") for id_ in income_ids + expense_ids]
     )
-    def update_budget(salary, side, dividends, other_inc,
+    def update_budget(salary, side, dividends, leibrente, other_inc,
                       rent, utilities, insurance, gebaeude, hausneben, serafe,
                       phone, claude, spotify, food, transport, entertainment, taxes, other_exp):
         salary = salary or 0
         side = side or 0
         dividends = dividends or 0
+        leibrente = leibrente or 0
         other_inc = other_inc or 0
         rent = rent or 0
         utilities = utilities or 0
@@ -123,7 +125,7 @@ def register_callbacks(app):
 
         # Persist
         user_settings.save({"budget": {
-            "income": {"salary": salary, "side": side, "dividends": dividends, "other": other_inc},
+            "income": {"salary": salary, "side": side, "dividends": dividends, "leibrente": leibrente, "other": other_inc},
             "expenses": {"rent": rent, "utilities": utilities, "insurance": insurance,
                          "gebaeude": gebaeude, "hausneben": hausneben, "serafe": serafe,
                          "phone": phone, "claude": claude, "spotify": spotify,
@@ -131,7 +133,7 @@ def register_callbacks(app):
                          "taxes": taxes, "other": other_exp},
         }})
 
-        incomes = {"Salary": salary, "Side Income": side, "Dividends": dividends, "Other Income": other_inc}
+        incomes = {"Salary": salary, "Side Income": side, "Dividends": dividends, "Leibrente": leibrente, "Other Income": other_inc}
         expenses = {"Rent": rent, "Utilities": utilities, "Health Insurance": insurance,
                     "Gebäudeversicherung": gebaeude, "Hausnebenkosten": hausneben, "SERAFE": serafe,
                     "Phone": phone, "Claude": claude, "Spotify": spotify,
