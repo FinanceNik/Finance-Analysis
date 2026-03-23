@@ -1,9 +1,11 @@
 # config.py - Central configuration for the Finance Analysis dashboard
 
+from functools import lru_cache
+
 DATA_DIR = "data"
 
 # Risk-free rate for Sharpe ratio calculation
-RISK_FREE_RATE = 0.02
+RISK_FREE_RATE = 0.02  # Default; can be overridden via dashboard settings
 
 # FIRE (Financial Independence) parameters
 FIRE_WITHDRAWAL_RATE = 0.04
@@ -203,3 +205,77 @@ SECTOR_MAP = {
     "POL":    "Crypto",
     "LINK":   "Crypto",
 }
+
+# Country-to-region mapping for yfinance auto-population of GEO_MAP
+COUNTRY_TO_REGION = {
+    "United States": "US",
+    "Canada": "US",
+    "Germany": "EU",
+    "France": "EU",
+    "Netherlands": "EU",
+    "Italy": "EU",
+    "Spain": "EU",
+    "Belgium": "EU",
+    "Austria": "EU",
+    "Ireland": "EU",
+    "Luxembourg": "EU",
+    "Finland": "EU",
+    "Portugal": "EU",
+    "Denmark": "EU",
+    "Sweden": "EU",
+    "Norway": "EU",
+    "Switzerland": "EU",
+    "United Kingdom": "EU",
+    "Japan": "World",
+    "Australia": "World",
+    "New Zealand": "World",
+    "Singapore": "World",
+    "Hong Kong": "World",
+    "South Korea": "World",
+    "Israel": "World",
+    "China": "EM",
+    "India": "EM",
+    "Brazil": "EM",
+    "Mexico": "EM",
+    "South Africa": "EM",
+    "Russia": "EM",
+    "Taiwan": "EM",
+    "Indonesia": "EM",
+    "Thailand": "EM",
+    "Turkey": "EM",
+    "Saudi Arabia": "EM",
+    "Poland": "EM",
+    "Chile": "EM",
+    "Colombia": "EM",
+    "Philippines": "EM",
+    "Malaysia": "EM",
+}
+
+
+@lru_cache(maxsize=256)
+def get_sector(symbol: str) -> str:
+    """Return sector for a symbol. Checks SECTOR_MAP first, then yfinance."""
+    if symbol in SECTOR_MAP:
+        return SECTOR_MAP[symbol]
+    try:
+        import yfinance as yf
+        sector = yf.Ticker(symbol).info.get("sector", "Other")
+    except Exception:
+        sector = "Other"
+    SECTOR_MAP[symbol] = sector
+    return sector
+
+
+@lru_cache(maxsize=256)
+def get_geography(symbol: str) -> str:
+    """Return geography region for a symbol. Checks GEO_MAP first, then yfinance."""
+    if symbol in GEO_MAP:
+        return GEO_MAP[symbol]
+    try:
+        import yfinance as yf
+        country = yf.Ticker(symbol).info.get("country", "Other")
+        region = COUNTRY_TO_REGION.get(country, "World")
+    except Exception:
+        region = "Other"
+    GEO_MAP[symbol] = region
+    return region

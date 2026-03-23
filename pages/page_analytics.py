@@ -1,3 +1,4 @@
+import logging
 import numpy as np
 import pandas as pd
 import dash_bootstrap_components as dbc
@@ -7,6 +8,8 @@ import Styles
 import config
 import dataLoadPositions as dlp
 import dataLoadTransactions as dlt
+
+logger = logging.getLogger(__name__)
 
 
 def _resolve_symbol(sym, available_cols, sym_to_ticker=None):
@@ -24,7 +27,8 @@ def _load_symbol_mapping():
     try:
         mapping = pd.read_csv("data/mapping.csv", sep=",")
         return dict(zip(mapping["symbol"], mapping["ticker"]))
-    except Exception:
+    except Exception as e:
+        logger.warning("Analytics calc failed: %s", e)
         return {}
 
 
@@ -86,12 +90,14 @@ def _compute_analytics():
 
         # --- Sortino Ratio ---
         try:
-            negative_returns = portfolio_daily[portfolio_daily < 0]
-            if len(negative_returns) > 1:
-                downside_deviation = float(negative_returns.std() * np.sqrt(252))
+            daily_rf = config.RISK_FREE_RATE / 252
+            downside_returns = portfolio_daily[portfolio_daily < daily_rf]
+            if len(downside_returns) > 1:
+                downside_deviation = float((downside_returns - daily_rf).std() * np.sqrt(252))
                 if downside_deviation > 0:
                     sortino_ratio = (portfolio_return - config.RISK_FREE_RATE) / downside_deviation
-        except Exception:
+        except Exception as e:
+            logger.warning("Analytics calc failed: %s", e)
             sortino_ratio = None
 
         # --- Max Drawdown from portfolio-weighted cumulative return ---
@@ -104,27 +110,25 @@ def _compute_analytics():
                 "date": drawdown.index,
                 "drawdown": (drawdown * 100).values,
             })
-        except Exception:
+        except Exception as e:
+            logger.warning("Analytics calc failed: %s", e)
             max_drawdown = None
             drawdown_series = pd.DataFrame()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Analytics calc failed: %s", e)
 
-    # --- CAGR from transaction history ---
+    # --- CAGR from portfolio cumulative return series ---
     cagr = None
     try:
-        txn_df = dlt.ingest_transactions()
-        if not txn_df.empty and "date" in txn_df.columns and "transaction" in txn_df.columns:
-            buys = txn_df[txn_df["transaction"].str.lower() == "buy"]
-            if not buys.empty:
-                first_buy_date = buys["date"].min()
-                today = datetime.today()
-                years = (today - first_buy_date).days / 365.25
-                current_value = dlp.portfolio_total_value()
-                total_invested = dlp.portfolio_cost_basis()
-                if years > 0 and total_invested > 0 and current_value > 0:
-                    cagr = (current_value / total_invested) ** (1 / years) - 1
-    except Exception:
+        cumulative = (1 + portfolio_daily).cumprod()
+        first_date = cumulative.index[0]
+        last_date = cumulative.index[-1]
+        years = (last_date - first_date).days / 365.25
+        if years >= 0.1:
+            total_return = cumulative.iloc[-1] / cumulative.iloc[0]
+            cagr = total_return ** (1 / years) - 1
+    except Exception as e:
+        logger.warning("Analytics calc failed: %s", e)
         cagr = None
 
     # --- Concentration Risk (Herfindahl Index) ---
@@ -135,7 +139,8 @@ def _compute_analytics():
         hhi = float(np.sum(weights ** 2))
         if hhi > 0:
             effective_positions = 1.0 / hhi
-    except Exception:
+    except Exception as e:
+        logger.warning("Analytics calc failed: %s", e)
         hhi = None
         effective_positions = None
 
@@ -147,7 +152,8 @@ def _compute_analytics():
         div_2y_ago = abs(dlt.total_transaction_amount(current_year - 2, "Dividend"))
         if div_2y_ago > 0 and div_last_year > 0:
             div_growth = (div_last_year / div_2y_ago - 1) * 100
-    except Exception:
+    except Exception as e:
+        logger.warning("Analytics calc failed: %s", e)
         div_growth = None
 
     # --- Value at Risk (95% historical) ---
@@ -155,7 +161,8 @@ def _compute_analytics():
     try:
         if portfolio_daily is not None and len(portfolio_daily) > 20:
             var_95 = float(np.percentile(portfolio_daily, 5)) * total_mv
-    except Exception:
+    except Exception as e:
+        logger.warning("Analytics calc failed: %s", e)
         var_95 = None
 
     metrics = {
@@ -251,7 +258,8 @@ def _build_fee_drag_section(df):
         if "date" in hist.columns:
             hist = hist.set_index("date")
         hist = 10 ** hist  # convert from log scale
-    except Exception:
+    except Exception as e:
+        logger.warning("Analytics calc failed: %s", e)
         return html.Div()
 
     # Map position symbols to historical columns
@@ -458,7 +466,8 @@ def _build_benchmark_section():
         if "date" in hist.columns:
             hist = hist.set_index("date")
         hist = 10 ** hist
-    except Exception:
+    except Exception as e:
+        logger.warning("Analytics calc failed: %s", e)
         return html.Div()
 
     if hist.empty or hist.shape[1] < 2:
@@ -595,7 +604,8 @@ def _build_correlation_heatmap():
         hist = 10 ** hist
         daily_returns = hist.pct_change(fill_method=None).dropna()
         corr = daily_returns.corr()
-    except Exception:
+    except Exception as e:
+        logger.warning("Analytics calc failed: %s", e)
         return html.Div()
 
     if corr.empty:
@@ -631,7 +641,7 @@ def _build_sector_treemap(df):
         return html.Div()
 
     df = df.copy()
-    df["sector"] = df["symbol"].map(config.SECTOR_MAP).fillna("Other")
+    df["sector"] = df["symbol"].map(config.get_sector).fillna("Other")
 
     labels = ["Portfolio"] + df["sector"].unique().tolist() + df["symbol"].tolist()
     parents = [""] + ["Portfolio"] * df["sector"].nunique() + df["sector"].tolist()
@@ -815,7 +825,8 @@ def _build_portfolio_vs_cost_basis():
         portfolio_value = portfolio_value.dropna()
         if portfolio_value.empty:
             return html.Div()
-    except Exception:
+    except Exception as e:
+        logger.warning("Analytics calc failed: %s", e)
         return html.Div()
 
     # Build cost basis time series (step function)
@@ -998,7 +1009,8 @@ def _build_risk_contribution(df):
             hist = hist.set_index("date")
         hist = 10 ** hist
         daily_returns = hist.pct_change(fill_method=None).dropna()
-    except Exception:
+    except Exception as e:
+        logger.warning("Analytics calc failed: %s", e)
         return html.Div()
 
     # Match holdings to historical columns
@@ -1068,7 +1080,8 @@ def _build_beta_chart(portfolio_daily):
             hist = hist.set_index("date")
         hist = 10 ** hist
         daily_returns = hist.pct_change(fill_method=None).dropna()
-    except Exception:
+    except Exception as e:
+        logger.warning("Analytics calc failed: %s", e)
         return html.Div()
 
     # Find SPY column
@@ -1146,7 +1159,8 @@ def _build_efficient_frontier(df):
             hist = hist.set_index("date")
         hist = 10 ** hist
         daily_returns = hist.pct_change(fill_method=None).dropna()
-    except Exception:
+    except Exception as e:
+        logger.warning("Analytics calc failed: %s", e)
         return html.Div()
 
     # Match holdings

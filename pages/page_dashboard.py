@@ -266,15 +266,64 @@ def _build_performance_chart():
     holding_cols = [c for c in data_cols if c not in bench_tickers]
     bench_cols = [c for c in bench_tickers if c in data_cols]
 
-    # Normalize to 100 at the first valid value for each series
+    # ── Find common start date across all holdings ──
+    # Use the latest first-valid-date so all series start from the same point
+    first_valid_dates = {}
+    for col in holding_cols:
+        valid = price_data[col].dropna()
+        if not valid.empty:
+            first_valid_dates[col] = valid.index[0]
+
+    if first_valid_dates:
+        common_start = max(first_valid_dates.values())
+    else:
+        common_start = price_data.index[0]
+
+    # Truncate all data to start from the common date
+    price_data = price_data.loc[common_start:]
+    dates = price_data.index.tolist()
+
+    # Normalize to 100 from the common start date for each series
     first_valid = price_data.apply(lambda s: s.dropna().iloc[0] if not s.dropna().empty else np.nan)
     normalized = (price_data / first_valid) * 100
 
-    # Portfolio average from holdings only (exclude benchmarks)
-    if holding_cols:
-        portfolio_avg = normalized[holding_cols].mean(axis=1).dropna()
+    # ── Value-weighted portfolio line ──
+    # Compute weights from current positions (market_value / total)
+    positions_df = dlp.fetch_data()
+    weights = {}
+    if not positions_df.empty and 'total_value' in positions_df.columns and 'symbol' in positions_df.columns:
+        total_mv = positions_df['total_value'].sum()
+        if total_mv > 0:
+            for _, row in positions_df.iterrows():
+                broker_sym = row['symbol']
+                ticker = sym_to_ticker.get(broker_sym, broker_sym)
+                if ticker in holding_cols:
+                    w = row['total_value'] / total_mv
+                    # Accumulate in case multiple rows map to same ticker
+                    weights[ticker] = weights.get(ticker, 0) + w
+
+    if weights:
+        # Build weighted portfolio return series
+        weighted_cols = [c for c in holding_cols if c in weights and c in normalized.columns]
+        if weighted_cols:
+            # Re-normalize weights to sum to 1 among available holdings
+            w_total = sum(weights[c] for c in weighted_cols)
+            if w_total > 0:
+                norm_weights = {c: weights[c] / w_total for c in weighted_cols}
+                portfolio_avg = sum(
+                    normalized[c].ffill() * norm_weights[c]
+                    for c in weighted_cols
+                ).dropna()
+            else:
+                portfolio_avg = normalized[holding_cols].mean(axis=1).dropna() if holding_cols else normalized.mean(axis=1).dropna()
+        else:
+            portfolio_avg = normalized[holding_cols].mean(axis=1).dropna() if holding_cols else normalized.mean(axis=1).dropna()
     else:
-        portfolio_avg = normalized.mean(axis=1).dropna()
+        # Fallback: equal-weight average from common start
+        if holding_cols:
+            portfolio_avg = normalized[holding_cols].mean(axis=1).dropna()
+        else:
+            portfolio_avg = normalized.mean(axis=1).dropna()
 
     traces = [{
         'x': dates,

@@ -60,7 +60,7 @@ def fetch_historical_data_yfinance():
     combined_df = combined_df.groupby(combined_df.index).first()
     combined_df = combined_df.sort_index()
 
-    combined_df_log = np.log10(combined_df + 1e-9)  # Add small value to avoid log(0)
+    combined_df_log = np.log10(combined_df.clip(lower=1e-6))  # Clip prices to avoid log(0)
     combined_df_log.index = combined_df_log.index.strftime("%Y-%m-%d")
     combined_df_log.index.name = "date"
     combined_df_log.to_csv("data/historical_data.csv", index=True)

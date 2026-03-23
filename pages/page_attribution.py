@@ -76,8 +76,8 @@ def _compute_attribution():
 
     df["weight"] = df["market_value"] / total_mv
 
-    # Map each holding to its sector via config.SECTOR_MAP
-    df["sector"] = df["symbol"].map(config.SECTOR_MAP).fillna("Other")
+    # Map each holding to its sector (manual overrides + yfinance auto-lookup)
+    df["sector"] = df["symbol"].map(config.get_sector).fillna("Other")
 
     # ── Per-holding return from cost basis ──
     df["holding_return"] = df["pnl_pct"].fillna(0.0)

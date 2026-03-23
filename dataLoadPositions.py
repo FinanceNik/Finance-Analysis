@@ -122,11 +122,12 @@ def _parse_xls_positions(filepath: str) -> pd.DataFrame:
     unnamed_cols = [c for c in df_positions.columns if "unnamed" in str(c).lower()]
     df_positions = df_positions.drop(columns=unnamed_cols, errors="ignore")
 
-    # Map symbols to geography: try CSV mapping first, fall back to config.GEO_MAP
+    # Map symbols to geography: try CSV mapping first, fall back to dynamic config lookup
     geography_map = _load_geography_map()
-    if not geography_map:
-        geography_map = config.GEO_MAP
-    df_positions["geography"] = df_positions["symbol"].map(geography_map).fillna("Other")
+    if geography_map:
+        df_positions["geography"] = df_positions["symbol"].map(geography_map).fillna("Other")
+    else:
+        df_positions["geography"] = df_positions["symbol"].map(config.get_geography).fillna("Other")
 
     # Ensure numeric columns are numeric
     for col in ["quantity", "unit_cost", "total_value", "price"]:
@@ -199,20 +200,20 @@ def portfolio_total_value() -> float:
     df = fetch_data()
     if df.empty:
         return 0
-    return int(df["total_value"].sum())
+    return round(df["total_value"].sum(), 2)
 
 
 def portfolio_cost_basis() -> float:
     df = fetch_data()
     if df.empty:
         return 0
-    return int((df["quantity"] * df["unit_cost"]).sum())
+    return round((df["quantity"] * df["unit_cost"]).sum(), 2)
 
 
 def portfolio_unrealized_pnl() -> float:
     mv = portfolio_total_value()
     cost = portfolio_cost_basis()
-    return int(mv - cost)
+    return round(mv - cost, 2)
 
 
 def portfolio_return_pct() -> float:
