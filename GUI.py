@@ -13,7 +13,7 @@ from pages import (page_positions, page_transactions, page_about,  # noqa: E501
                    page_budget, page_dashboard, page_scenarios, page_income,
                    page_dividends, page_macro, page_backtest, page_currency,
                    page_watchlist, page_calendar, page_attribution,
-                   page_peers)
+                   page_peers, page_settings)
 import fetchAPI
 import dataLoadMacro as dlm
 import backtestEngine as bte
@@ -48,6 +48,7 @@ PAGE_MAP = {
     "/goals": ("Planning", "Goals"),
     "/macro": ("Macro", "Macro Dashboard"),
     "/backtest": ("Macro", "Strategy Backtest"),
+    "/settings": ("", "Settings"),
     "/about": ("", "About"),
 }
 
@@ -67,6 +68,7 @@ _ICONS = {
     "Real Estate": "\u2302", "Goals": "\u25C9",
     "Macro Dashboard": "\u25C9",
     "Strategy Backtest": "\u25B7",
+    "Settings": "\u2699",
     "About": "\u24D8",
 }
 
@@ -130,6 +132,7 @@ sidebar = html.Div(
             _nav_link("Strategy Backtest", f"{basePath}/backtest"),
         ], "macro"),
         dbc.Nav([
+            _nav_link("Settings", f"{basePath}/settings"),
             _nav_link("About", f"{basePath}/about"),
         ], vertical=True, pills=True, style={"marginTop": "12px"}),
     ],
@@ -388,6 +391,8 @@ def render_page_content(pathname):
         return page_calendar.layout()
     elif pathname == f"{basePath}/peers":
         return page_peers.layout()
+    elif pathname == f"{basePath}/settings":
+        return page_settings.layout()
     elif pathname == f"{basePath}/about":
         return page_about.layout()
 
@@ -408,6 +413,7 @@ page_watchlist.register_callbacks(app)
 page_calendar.register_callbacks(app)
 page_attribution.register_callbacks(app)
 page_peers.register_callbacks(app)
+page_settings.register_callbacks(app)
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0', port=8080, debug=False)

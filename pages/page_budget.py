@@ -5,11 +5,13 @@ import config
 import dataLoadPositions as dlp
 import user_settings
 
+
 def _hex_to_rgba(hex_color, alpha):
     """Convert hex color to rgba string."""
     h = hex_color.lstrip('#')
     r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
     return f"rgba({r},{g},{b},{alpha})"
+
 
 def _calc_years_to_fire(portfolio, annual_savings, fire_number, growth_rate=config.FIRE_GROWTH_RATE):
     """Calculate years to reach FIRE number with contributions and compound growth."""
@@ -26,58 +28,19 @@ def _calc_years_to_fire(portfolio, annual_savings, fire_number, growth_rate=conf
             return year
     return float('inf')
 
+
 def layout():
-    saved = user_settings.get("budget", {})
-    inc = saved.get("income", {})
-    exp = saved.get("expenses", {})
-
-    income_fields = [
-        ("Salary (Monthly)", "budget-salary", inc.get("salary", 9583)),
-        ("Side Income", "budget-side", inc.get("side", 375)),
-        ("Dividend Income", "budget-dividends", inc.get("dividends", 292)),
-        ("Other Income", "budget-other-inc", inc.get("other", 0)),
-    ]
-
-    expense_fields = [
-        ("Rent", "budget-rent", exp.get("rent", 1680)),
-        ("Utilities", "budget-utilities", exp.get("utilities", 25)),
-        ("Health Insurance", "budget-insurance", exp.get("insurance", 320)),
-        ("Gebäudeversicherung", "budget-gebaeude", exp.get("gebaeude", 0)),
-        ("Hausnebenkosten", "budget-hausneben", exp.get("hausneben", 0)),
-        ("SERAFE", "budget-serafe", exp.get("serafe", 0)),
-        ("Phone Contract", "budget-phone", exp.get("phone", 0)),
-        ("Claude", "budget-claude", exp.get("claude", 0)),
-        ("Spotify", "budget-spotify", exp.get("spotify", 0)),
-        ("Food & Groceries", "budget-food", exp.get("food", 0)),
-        ("Transport", "budget-transport", exp.get("transport", 0)),
-        ("Entertainment", "budget-entertainment", exp.get("entertainment", 0)),
-        ("Leibrente", "budget-leibrente", exp.get("leibrente", 1200)),
-        ("Taxes", "budget-taxes", exp.get("taxes", 0)),
-        ("Other Expenses", "budget-other-exp", exp.get("other", 0)),
-    ]
-
-    def _input_row(fields, width="22%"):
-        return [
-            html.Div([
-                html.Label(label),
-                dcc.Input(id=id_, type="number", value=val,
-                          style={"width": "100%", "padding": "6px"}),
-            ], style={"width": width, "display": "inline-block", "padding": "8px 12px"})
-            for label, id_, val in fields
-        ]
-
     return html.Div([
         html.H4("Budget & Cash Flow"),
+        html.P([
+            "Budget inputs are configured on the ",
+            dcc.Link("Settings page", href="/settings"),
+            ".",
+        ], style={"color": "var(--text-secondary)", "marginBottom": "16px"}),
 
-        html.Div([
-            html.H5("Monthly Income"),
-            html.Div(_input_row(income_fields, "22%")),
-        ], style={"marginBottom": "10px"}),
-
-        html.Div([
-            html.H5("Monthly Expenses"),
-            html.Div(_input_row(expense_fields, "14%")),
-        ], style={"marginBottom": "10px"}),
+        # Trigger: hidden div fires callback on page load
+        html.Div(id="budget-trigger", style={"display": "none"}),
+        dcc.Interval(id="budget-load-interval", interval=500, max_intervals=1),
 
         dcc.Loading(
             html.Div(id="budget-kpis", children=Styles.skeleton_kpis(4)),
@@ -87,52 +50,38 @@ def layout():
             type="dot"),
     ])
 
-def register_callbacks(app):
-    income_ids = ["budget-salary", "budget-side", "budget-dividends", "budget-other-inc"]
-    expense_ids = ["budget-rent", "budget-utilities", "budget-insurance",
-                   "budget-gebaeude", "budget-hausneben", "budget-serafe",
-                   "budget-phone", "budget-claude", "budget-spotify",
-                   "budget-food", "budget-transport", "budget-entertainment",
-                   "budget-leibrente", "budget-taxes", "budget-other-exp"]
 
+def register_callbacks(app):
     @app.callback(
         [Output("budget-kpis", "children"),
          Output("budget-charts", "children")],
-        [Input(id_, "value") for id_ in income_ids + expense_ids]
+        [Input("budget-load-interval", "n_intervals")]
     )
-    def update_budget(salary, side, dividends, other_inc,
-                      rent, utilities, insurance, gebaeude, hausneben, serafe,
-                      phone, claude, spotify, food, transport, entertainment,
-                      leibrente, taxes, other_exp):
-        salary = salary or 0
-        side = side or 0
-        dividends = dividends or 0
-        other_inc = other_inc or 0
-        rent = rent or 0
-        utilities = utilities or 0
-        insurance = insurance or 0
-        gebaeude = gebaeude or 0
-        hausneben = hausneben or 0
-        serafe = serafe or 0
-        phone = phone or 0
-        claude = claude or 0
-        spotify = spotify or 0
-        food = food or 0
-        transport = transport or 0
-        entertainment = entertainment or 0
-        leibrente = leibrente or 0
-        taxes = taxes or 0
-        other_exp = other_exp or 0
+    def update_budget(n_intervals):
+        saved = user_settings.get("budget", {})
+        inc = saved.get("income", {})
+        exp = saved.get("expenses", {})
 
-        # Persist
-        user_settings.save({"budget": {
-            "income": {"salary": salary, "side": side, "dividends": dividends, "other": other_inc},
-            "expenses": {"rent": rent, "utilities": utilities, "insurance": insurance,
-                         "gebaeude": gebaeude, "hausneben": hausneben, "serafe": serafe,
-                         "phone": phone, "claude": claude, "spotify": spotify,
-                         "food": food, "transport": transport, "entertainment": entertainment,
-                         "leibrente": leibrente, "taxes": taxes, "other": other_exp},
-        }})
+        salary = inc.get("salary", 9583)
+        side = inc.get("side", 375)
+        dividends = inc.get("dividends", 292)
+        other_inc = inc.get("other", 0)
+
+        rent = exp.get("rent", 1680)
+        utilities = exp.get("utilities", 25)
+        insurance = exp.get("insurance", 320)
+        gebaeude = exp.get("gebaeude", 0)
+        hausneben = exp.get("hausneben", 0)
+        serafe = exp.get("serafe", 0)
+        phone = exp.get("phone", 0)
+        claude = exp.get("claude", 0)
+        spotify = exp.get("spotify", 0)
+        food = exp.get("food", 0)
+        transport = exp.get("transport", 0)
+        entertainment = exp.get("entertainment", 0)
+        leibrente = exp.get("leibrente", 1200)
+        taxes = exp.get("taxes", 0)
+        other_exp = exp.get("other", 0)
 
         incomes = {"Salary": salary, "Side Income": side, "Dividends": dividends, "Other Income": other_inc}
         expenses = {"Rent": rent, "Utilities": utilities, "Health Insurance": insurance,
@@ -253,6 +202,7 @@ def register_callbacks(app):
 
         return kpis, charts
 
+
 def _build_sankey(incomes, expenses, savings):
     """Build a Sankey diagram showing cash flow from income to expenses and savings."""
     active_inc = {k: v for k, v in incomes.items() if v > 0}
@@ -290,7 +240,6 @@ def _build_sankey(incomes, expenses, savings):
 
     # Build links: distribute each income source proportionally across expenses
     total_income = sum(active_inc.values())
-    total_outflow = sum(active_exp.values()) + (abs(savings) if savings != 0 else 0)
 
     sources, targets, values, link_colors = [], [], [], []
 
@@ -336,6 +285,7 @@ def _build_sankey(incomes, expenses, savings):
             height=450,
         )
     }
+
 
 def _build_fire_projection(portfolio, annual_savings, fire_number, growth_rate=config.FIRE_GROWTH_RATE):
     """Build a projection chart showing portfolio growth toward FIRE number."""
