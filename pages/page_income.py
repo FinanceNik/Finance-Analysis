@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 from dash import dcc, html
 from datetime import datetime
+import dash_bootstrap_components as dbc
 import Styles
 import dataLoadTransactions as dlt
 import user_settings
@@ -272,7 +273,8 @@ def _build_savings_rate_chart(month_labels, monthly_income, monthly_expenses):
     }
     return chart
 
-def layout():
+def _income_statement_content():
+    """The existing income statement layout, wrapped for tab embedding."""
     inc, exp = _get_budget()
     salary, side, budget_dividends, other_inc = _monthly_income_fields(inc)
     total_budget_expenses = _monthly_expense_total(exp)
@@ -313,8 +315,6 @@ def layout():
     )
 
     return html.Div([
-        html.H4("Income Statement"),
-
         # ── Section 1: KPI Row ──
         html.Div([
             Styles.kpiboxes("Annual Gross Income", f"{annual_gross_income:,.0f}", Styles.colorPalette[0]),
@@ -358,4 +358,18 @@ def layout():
                 config={"displayModeBar": False},
             ),
         ], className="card"),
+    ])
+
+
+def layout():
+    from pages import page_dividends, page_calendar, page_drip
+
+    return html.Div([
+        html.H4("Income & Dividends"),
+        dbc.Tabs([
+            dbc.Tab(_income_statement_content(), label="Income Statement", tab_id="inc-statement"),
+            dbc.Tab(page_dividends.layout(), label="Dividends", tab_id="inc-dividends"),
+            dbc.Tab(page_calendar.layout(), label="Calendar", tab_id="inc-calendar"),
+            dbc.Tab(page_drip.layout(), label="DRIP Simulator", tab_id="inc-drip"),
+        ], id="income-tabs", active_tab="inc-statement"),
     ])

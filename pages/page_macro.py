@@ -1,5 +1,6 @@
 # pages/page_macro.py — Macroeconomic Dashboard
 from dash import dcc, html, Input, Output
+import dash_bootstrap_components as dbc
 import Styles
 import config
 import dataLoadMacro as dlm
@@ -725,9 +726,9 @@ def _signal_panel():
 # Layout
 # ─────────────────────────────────────────────
 
-def layout():
+def _macro_dashboard_content():
+    """The existing macro dashboard layout, wrapped for tab embedding."""
     return html.Div([
-        html.H4("Macro Dashboard"),
         html.P("Track macroeconomic indicators, market sentiment, rates, commodities, and crypto.",
                style={"fontSize": "13px", "color": "var(--text-muted, #888)",
                       "margin": "0 0 16px 0"}),
@@ -757,6 +758,18 @@ def layout():
             ])),
             type="dot",
         ),
+    ])
+
+
+def layout():
+    from pages import page_backtest
+
+    return html.Div([
+        html.H4("Macro & Strategy"),
+        dbc.Tabs([
+            dbc.Tab(_macro_dashboard_content(), label="Macro Dashboard", tab_id="macro-dash"),
+            dbc.Tab(page_backtest.layout(), label="Strategy Backtest", tab_id="macro-backtest"),
+        ], id="macro-tabs", active_tab="macro-dash"),
     ])
 
 
