@@ -373,40 +373,47 @@ def register_callbacks(app):
         prevent_initial_call=True,
     )
     def update_backtest(run_clicks, opt_clicks, sensitivity, target):
-        ctx = dash.callback_context
-        if not ctx.triggered:
-            return dash.no_update, dash.no_update
+        import logging
+        logger = logging.getLogger(__name__)
+        try:
+            ctx = dash.callback_context
+            if not ctx.triggered:
+                return dash.no_update, dash.no_update
+            trigger = ctx.triggered[0]["prop_id"]
 
-        trigger = ctx.triggered[0]["prop_id"]
-        df = bte.load_and_prepare()
-        if df.empty:
-            return html.P("No macro data available. Please refresh data first.",
-                          style={"color": Styles.strongRed}), sensitivity
-
-        if "bt-optimize-btn" in trigger:
-            # Run grid-search optimization
-            opt = bte.optimize_alpha(df, target=target)
-            if not opt["all_results"]:
-                return html.P("Optimization produced no results.",
+            df = bte.load_and_prepare()
+            if df.empty:
+                return html.P("No macro data available. Please refresh data first.",
                               style={"color": Styles.strongRed}), sensitivity
 
-            result_df = opt["optimal_backtest"]
-            metrics = opt["optimal_metrics"]
-            opt_s = opt["optimal_sensitivity"]
+            if "bt-optimize-btn" in trigger:
+                opt = bte.optimize_alpha(df, target=target)
+                if not opt["all_results"]:
+                    return html.P("Optimization produced no results.",
+                                  style={"color": Styles.strongRed}), sensitivity
 
-            return _render_backtest_results(
-                result_df, metrics,
-                opt_results=opt["all_results"],
-                opt_target=target,
-                opt_sensitivity=opt_s,
-            ), opt_s
+                result_df = opt["optimal_backtest"]
+                metrics = opt["optimal_metrics"]
+                opt_s = opt["optimal_sensitivity"]
 
-        else:
-            # Single backtest at given sensitivity
-            result_df = bte.run_backtest(df, sensitivity=sensitivity)
-            if result_df.empty:
-                return html.P("Insufficient data for backtest.",
-                              style={"color": Styles.strongRed}), sensitivity
+                return _render_backtest_results(
+                    result_df, metrics,
+                    opt_results=opt["all_results"],
+                    opt_target=target,
+                    opt_sensitivity=opt_s,
+                ), opt_s
 
-            metrics = bte.compute_metrics(result_df)
-            return _render_backtest_results(result_df, metrics), sensitivity
+            else:
+                result_df = bte.run_backtest(df, sensitivity=sensitivity)
+                if result_df.empty:
+                    return html.P("Insufficient data for backtest.",
+                                  style={"color": Styles.strongRed}), sensitivity
+
+                metrics = bte.compute_metrics(result_df)
+                return _render_backtest_results(result_df, metrics), sensitivity
+
+        except Exception as e:
+            logger.exception("Backtest callback failed")
+            return html.Div([
+                html.P(f"Backtest error: {e}", style={"color": Styles.strongRed}),
+            ]), sensitivity or 1.0
