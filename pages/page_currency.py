@@ -178,15 +178,14 @@ def layout():
         # Donut + Bar side by side
         html.Div([
             dcc.Graph(id="currency-donut-chart", figure=donut_chart)
-        ], className="card", style=Styles.STYLE(48)),
-        html.Div([""], style=Styles.FILLER()),
+        ], className="card"),
         html.Div([
             dcc.Graph(id="currency-bar-chart", figure=bar_chart)
-        ], className="card", style=Styles.STYLE(48)),
+        ], className="card"),
         html.Hr(),
 
         # Table (full width)
         html.Div([
             fx_table,
-        ], className="card", style={**Styles.STYLE(100), "marginBottom": "20px"}),
+        ], className="card", style={"marginBottom": "20px"}),
     ])

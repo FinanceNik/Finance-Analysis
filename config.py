@@ -220,3 +220,50 @@ SECTOR_MAP = {
     "POL":    "Crypto",
     "LINK":   "Crypto",
 }
+
+# Country-to-region mapping for yfinance fallback
+COUNTRY_TO_REGION = {
+    "United States": "US", "Canada": "US",
+    "Germany": "EU", "France": "EU", "Netherlands": "EU", "Italy": "EU",
+    "Spain": "EU", "Belgium": "EU", "Austria": "EU", "Ireland": "EU",
+    "Switzerland": "EU", "United Kingdom": "EU", "Sweden": "EU",
+    "Norway": "EU", "Denmark": "EU", "Finland": "EU", "Portugal": "EU",
+    "China": "EM", "India": "EM", "Brazil": "EM", "South Korea": "EM",
+    "Taiwan": "EM", "South Africa": "EM", "Mexico": "EM", "Indonesia": "EM",
+    "Turkey": "EM", "Thailand": "EM", "Malaysia": "EM", "Poland": "EM",
+    "Japan": "World", "Australia": "World", "Hong Kong": "World",
+    "Singapore": "World", "New Zealand": "World",
+}
+
+
+# ── Dynamic lookup functions (check static maps first, then yfinance) ──
+from functools import lru_cache as _lru_cache
+
+
+@_lru_cache(maxsize=256)
+def get_sector(symbol):
+    """Return sector for a symbol: check SECTOR_MAP first, then yfinance."""
+    if symbol in SECTOR_MAP:
+        return SECTOR_MAP[symbol]
+    try:
+        import yfinance as yf
+        sector = yf.Ticker(symbol).info.get('sector', 'Other')
+        SECTOR_MAP[symbol] = sector
+        return sector
+    except Exception:
+        return 'Other'
+
+
+@_lru_cache(maxsize=256)
+def get_geography(symbol):
+    """Return geography region: check GEO_MAP first, then yfinance country."""
+    if symbol in GEO_MAP:
+        return GEO_MAP[symbol]
+    try:
+        import yfinance as yf
+        country = yf.Ticker(symbol).info.get('country', '')
+        region = COUNTRY_TO_REGION.get(country, 'Other')
+        GEO_MAP[symbol] = region
+        return region
+    except Exception:
+        return 'Other'
