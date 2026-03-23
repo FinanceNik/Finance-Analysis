@@ -264,7 +264,10 @@ def add_position_pnl_columns() -> pd.DataFrame:
     if df.empty:
         return df
     df = df.copy()
-    df["market_value"] = df["quantity"] * df["price"]
+    if "base_value" in df.columns:
+        df["market_value"] = df["base_value"]
+    else:
+        df["market_value"] = df["quantity"] * df["price"]
     df["cost_basis"] = df["quantity"] * df["unit_cost"]
     df["unrealized_pnl"] = df["market_value"] - df["cost_basis"]
     df["pnl_pct"] = df["unrealized_pnl"] / df["cost_basis"].replace(0, float("nan"))

@@ -70,7 +70,10 @@ def _compute_analytics():
             matched_cols = list(holding_weights.keys())
             weights_arr = np.array([holding_weights[c] for c in matched_cols])
             weights_arr = weights_arr / weights_arr.sum()
-            subset = hist[matched_cols].dropna()
+            subset = hist[matched_cols].ffill().dropna()
+            # Only compute returns from the common start date where all holdings have data
+            common_start = subset.index[0]
+            subset = subset.loc[common_start:]
             daily_returns = subset.pct_change().iloc[1:]
             portfolio_daily = (daily_returns * weights_arr).sum(axis=1).dropna()
         else:
@@ -566,33 +569,47 @@ def _build_benchmark_section():
         ),
     }
 
-    # ── Alpha KPIs ──
+    # ── Alpha KPIs (computed over common date ranges) ──
     alpha_kpis = []
     portfolio_final = portfolio_avg.iloc[-1] if not portfolio_avg.empty else 100
     portfolio_return = portfolio_final - 100
 
     for col in bench_cols:
         series = normalized[col].dropna()
-        if not series.empty:
-            bench_final = series.iloc[-1]
-            bench_return = bench_final - 100
-            alpha = portfolio_return - bench_return
-            label = config.BENCHMARK_NAMES.get(col, col)
-            color = Styles.strongGreen if alpha >= 0 else Styles.strongRed
-            alpha_kpis.append(
-                Styles.kpiboxes(f"Alpha vs {label}", f"{alpha:+.1f}%", color)
-            )
+        if not series.empty and not portfolio_avg.empty:
+            # Find common date range between portfolio and this benchmark
+            common_start = max(portfolio_avg.index[0], series.index[0])
+            common_end = min(portfolio_avg.index[-1], series.index[-1])
+            p_common = portfolio_avg.loc[common_start:common_end]
+            b_common = series.loc[common_start:common_end]
+            if not p_common.empty and not b_common.empty:
+                p_ret = p_common.iloc[-1] - p_common.iloc[0]
+                b_ret = b_common.iloc[-1] - b_common.iloc[0]
+                alpha = p_ret - b_ret
+                label = config.BENCHMARK_NAMES.get(col, col)
+                color = Styles.strongGreen if alpha >= 0 else Styles.strongRed
+                alpha_kpis.append(
+                    Styles.kpiboxes(f"Alpha vs {label}", f"{alpha:+.1f}%", color)
+                )
 
-    # Blended benchmark alpha
-    if blended_series is not None and not blended_series.empty:
-        blend_final = blended_series.iloc[-1]
-        blend_return = blend_final - 100
-        blend_alpha = portfolio_return - blend_return
-        blend_color = Styles.strongGreen if blend_alpha >= 0 else Styles.strongRed
-        alpha_kpis.append(
-            Styles.kpiboxes(f"Alpha vs {config.BLENDED_BENCHMARK_NAME}",
-                            f"{blend_alpha:+.1f}%", blend_color)
-        )
+    # Blended benchmark alpha (over common date range)
+    if blended_series is not None and not blended_series.empty and not portfolio_avg.empty:
+        # Convert blended_series index to match portfolio_avg index type for comparison
+        blend_idx = pd.to_datetime(blended_series.index)
+        port_idx = pd.to_datetime(portfolio_avg.index)
+        common_start = max(port_idx[0], blend_idx[0])
+        common_end = min(port_idx[-1], blend_idx[-1])
+        p_common = portfolio_avg.loc[common_start:common_end]
+        b_common = blended_series.loc[common_start:common_end]
+        if not p_common.empty and not b_common.empty:
+            p_ret = p_common.iloc[-1] - p_common.iloc[0]
+            b_ret = b_common.iloc[-1] - b_common.iloc[0]
+            blend_alpha = p_ret - b_ret
+            blend_color = Styles.strongGreen if blend_alpha >= 0 else Styles.strongRed
+            alpha_kpis.append(
+                Styles.kpiboxes(f"Alpha vs {config.BLENDED_BENCHMARK_NAME}",
+                                f"{blend_alpha:+.1f}%", blend_color)
+            )
 
     alpha_kpis.insert(0, Styles.kpiboxes(
         "Portfolio Return", f"{portfolio_return:+.1f}%",
