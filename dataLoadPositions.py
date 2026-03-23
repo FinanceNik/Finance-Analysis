@@ -6,7 +6,7 @@ import pandas as pd
 from datetime import datetime
 from functools import lru_cache
 import config
-from utils import standardize_columns
+from utils import standardize_columns, convert_to_base
 
 logger = logging.getLogger(__name__)
 
@@ -122,12 +122,11 @@ def _parse_xls_positions(filepath: str) -> pd.DataFrame:
     unnamed_cols = [c for c in df_positions.columns if "unnamed" in str(c).lower()]
     df_positions = df_positions.drop(columns=unnamed_cols, errors="ignore")
 
-    # Map symbols to geography: try CSV mapping first, fall back to dynamic config lookup
+    # Map symbols to geography: try CSV mapping first, fall back to config.GEO_MAP
     geography_map = _load_geography_map()
-    if geography_map:
-        df_positions["geography"] = df_positions["symbol"].map(geography_map).fillna("Other")
-    else:
-        df_positions["geography"] = df_positions["symbol"].map(config.get_geography).fillna("Other")
+    if not geography_map:
+        geography_map = config.GEO_MAP
+    df_positions["geography"] = df_positions["symbol"].map(geography_map).fillna("Other")
 
     # Ensure numeric columns are numeric
     for col in ["quantity", "unit_cost", "total_value", "price"]:
@@ -181,6 +180,27 @@ def fetch_data() -> pd.DataFrame:
     # Add account_id column from filename
     df["account_id"] = _extract_account_id(_positions_filepath)
 
+    # ── FX conversion: add base_value column if currency data is present ──
+    if "currency" in df.columns and "total_value" in df.columns:
+        try:
+            from fetchAPI import fetch_fx_rates
+            fx_rates = fetch_fx_rates(base=config.BASE_CURRENCY)
+            df["base_value"] = df.apply(
+                lambda row: convert_to_base(
+                    row["total_value"],
+                    str(row["currency"]).strip(),
+                    fx_rates,
+                ),
+                axis=1,
+            )
+        except Exception as e:
+            logger.warning("FX conversion failed, falling back to total_value: %s", e)
+            df["base_value"] = df["total_value"]
+    else:
+        # No currency column — base_value mirrors total_value
+        if "total_value" in df.columns:
+            df["base_value"] = df["total_value"]
+
     return df
 
 
@@ -200,20 +220,36 @@ def portfolio_total_value() -> float:
     df = fetch_data()
     if df.empty:
         return 0
-    return round(df["total_value"].sum(), 2)
+    # Prefer base_value (FX-converted) when available
+    col = "base_value" if "base_value" in df.columns else "total_value"
+    return int(df[col].sum())
 
 
 def portfolio_cost_basis() -> float:
     df = fetch_data()
     if df.empty:
         return 0
-    return round((df["quantity"] * df["unit_cost"]).sum(), 2)
+    raw_cost = df["quantity"] * df["unit_cost"]
+    # Convert cost basis to base currency when FX data is available
+    if "currency" in df.columns:
+        try:
+            from fetchAPI import fetch_fx_rates
+            fx_rates = fetch_fx_rates(base=config.BASE_CURRENCY)
+            base_cost = raw_cost.copy()
+            for idx in df.index:
+                ccy = str(df.loc[idx, "currency"]).strip()
+                rate = fx_rates.get(ccy, 1.0)
+                base_cost.loc[idx] = raw_cost.loc[idx] * rate
+            return int(base_cost.sum())
+        except Exception:
+            pass
+    return int(raw_cost.sum())
 
 
 def portfolio_unrealized_pnl() -> float:
     mv = portfolio_total_value()
     cost = portfolio_cost_basis()
-    return round(mv - cost, 2)
+    return int(mv - cost)
 
 
 def portfolio_return_pct() -> float:
@@ -235,12 +271,19 @@ def add_position_pnl_columns() -> pd.DataFrame:
     return df
 
 
+def _val_col(df: pd.DataFrame) -> str:
+    """Return the best value column: base_value (FX-converted) or total_value."""
+    return "base_value" if "base_value" in df.columns else "total_value"
+
+
 def allocation_by_asset_type() -> pd.DataFrame:
     df = fetch_data()
     if df.empty:
         return pd.DataFrame(columns=["asset_type", "weight"])
+    col = _val_col(df)
     total = portfolio_total_value()
-    alloc = df.groupby("asset_type")["total_value"].sum().reset_index()
+    alloc = df.groupby("asset_type")[col].sum().reset_index()
+    alloc.rename(columns={col: "total_value"}, inplace=True)
     alloc["weight"] = alloc["total_value"] / total
     return alloc
 
@@ -251,8 +294,10 @@ def allocation_by_geography() -> pd.DataFrame:
         return pd.DataFrame(columns=["geography", "weight"])
     if "geography" not in df.columns:
         return pd.DataFrame(columns=["geography", "weight"])
+    col = _val_col(df)
     total = portfolio_total_value()
-    alloc = df.groupby("geography")["total_value"].sum().reset_index()
+    alloc = df.groupby("geography")[col].sum().reset_index()
+    alloc.rename(columns={col: "total_value"}, inplace=True)
     alloc["weight"] = alloc["total_value"] / total
     return alloc
 
@@ -261,8 +306,10 @@ def allocation_by_currency() -> pd.DataFrame:
     df = fetch_data()
     if df.empty:
         return pd.DataFrame(columns=["currency", "weight"])
+    col = _val_col(df)
     total = portfolio_total_value()
-    alloc = df.groupby("currency")["total_value"].sum().reset_index()
+    alloc = df.groupby("currency")[col].sum().reset_index()
+    alloc.rename(columns={col: "total_value"}, inplace=True)
     alloc["weight"] = alloc["total_value"] / total
     return alloc
 

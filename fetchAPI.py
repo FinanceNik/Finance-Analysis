@@ -2,9 +2,46 @@ import logging
 import pandas as pd
 import yfinance as yf
 import numpy as np
+from functools import lru_cache
 import config
 
 logger = logging.getLogger(__name__)
+
+# ── Currency pairs to fetch (relative to base currency) ──
+_FX_PAIRS = ['USD', 'EUR', 'GBP', 'JPY', 'CAD', 'AUD', 'SEK', 'NOK', 'DKK']
+
+
+@lru_cache(maxsize=1)
+def fetch_fx_rates(base='CHF') -> dict:
+    """Fetch current FX rates from yfinance currency pairs.
+
+    Returns a dict mapping currency code -> rate in base currency.
+    E.g. {'USD': 0.88, 'EUR': 0.96, 'CHF': 1.0, ...}
+    The rate represents how many units of base currency one unit of
+    foreign currency is worth (i.e. multiply foreign amount by rate
+    to get base currency amount).
+    """
+    rates = {base: 1.0}
+
+    for ccy in _FX_PAIRS:
+        if ccy == base:
+            rates[ccy] = 1.0
+            continue
+        # yfinance convention: USDCHF=X gives price of 1 USD in CHF
+        pair = f"{ccy}{base}=X"
+        try:
+            ticker = yf.Ticker(pair)
+            hist = ticker.history(period="5d")
+            if not hist.empty:
+                rates[ccy] = float(hist["Close"].dropna().iloc[-1])
+            else:
+                logger.warning("No FX data for %s — defaulting to 1.0", pair)
+                rates[ccy] = 1.0
+        except Exception as e:
+            logger.warning("Failed to fetch FX rate %s: %s — defaulting to 1.0", pair, e)
+            rates[ccy] = 1.0
+
+    return rates
 
 
 def fetch_historical_data_yfinance():
@@ -60,7 +97,7 @@ def fetch_historical_data_yfinance():
     combined_df = combined_df.groupby(combined_df.index).first()
     combined_df = combined_df.sort_index()
 
-    combined_df_log = np.log10(combined_df.clip(lower=1e-6))  # Clip prices to avoid log(0)
+    combined_df_log = np.log10(combined_df + 1e-9)  # Add small value to avoid log(0)
     combined_df_log.index = combined_df_log.index.strftime("%Y-%m-%d")
     combined_df_log.index.name = "date"
     combined_df_log.to_csv("data/historical_data.csv", index=True)

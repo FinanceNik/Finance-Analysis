@@ -1,15 +1,13 @@
-import logging
 import numpy as np
 import pandas as pd
 import dash_bootstrap_components as dbc
 from dash import dcc, html, Input, Output
 from datetime import datetime
+import yfinance as yf
 import Styles
 import config
 import dataLoadPositions as dlp
 import dataLoadTransactions as dlt
-
-logger = logging.getLogger(__name__)
 
 
 def _resolve_symbol(sym, available_cols, sym_to_ticker=None):
@@ -27,8 +25,7 @@ def _load_symbol_mapping():
     try:
         mapping = pd.read_csv("data/mapping.csv", sep=",")
         return dict(zip(mapping["symbol"], mapping["ticker"]))
-    except Exception as e:
-        logger.warning("Analytics calc failed: %s", e)
+    except Exception:
         return {}
 
 
@@ -90,14 +87,12 @@ def _compute_analytics():
 
         # --- Sortino Ratio ---
         try:
-            daily_rf = config.RISK_FREE_RATE / 252
-            downside_returns = portfolio_daily[portfolio_daily < daily_rf]
-            if len(downside_returns) > 1:
-                downside_deviation = float((downside_returns - daily_rf).std() * np.sqrt(252))
+            negative_returns = portfolio_daily[portfolio_daily < 0]
+            if len(negative_returns) > 1:
+                downside_deviation = float(negative_returns.std() * np.sqrt(252))
                 if downside_deviation > 0:
                     sortino_ratio = (portfolio_return - config.RISK_FREE_RATE) / downside_deviation
-        except Exception as e:
-            logger.warning("Analytics calc failed: %s", e)
+        except Exception:
             sortino_ratio = None
 
         # --- Max Drawdown from portfolio-weighted cumulative return ---
@@ -110,25 +105,27 @@ def _compute_analytics():
                 "date": drawdown.index,
                 "drawdown": (drawdown * 100).values,
             })
-        except Exception as e:
-            logger.warning("Analytics calc failed: %s", e)
+        except Exception:
             max_drawdown = None
             drawdown_series = pd.DataFrame()
-    except Exception as e:
-        logger.warning("Analytics calc failed: %s", e)
+    except Exception:
+        pass
 
-    # --- CAGR from portfolio cumulative return series ---
+    # --- CAGR from transaction history ---
     cagr = None
     try:
-        cumulative = (1 + portfolio_daily).cumprod()
-        first_date = cumulative.index[0]
-        last_date = cumulative.index[-1]
-        years = (last_date - first_date).days / 365.25
-        if years >= 0.1:
-            total_return = cumulative.iloc[-1] / cumulative.iloc[0]
-            cagr = total_return ** (1 / years) - 1
-    except Exception as e:
-        logger.warning("Analytics calc failed: %s", e)
+        txn_df = dlt.ingest_transactions()
+        if not txn_df.empty and "date" in txn_df.columns and "transaction" in txn_df.columns:
+            buys = txn_df[txn_df["transaction"].str.lower() == "buy"]
+            if not buys.empty:
+                first_buy_date = buys["date"].min()
+                today = datetime.today()
+                years = (today - first_buy_date).days / 365.25
+                current_value = dlp.portfolio_total_value()
+                total_invested = dlp.portfolio_cost_basis()
+                if years > 0 and total_invested > 0 and current_value > 0:
+                    cagr = (current_value / total_invested) ** (1 / years) - 1
+    except Exception:
         cagr = None
 
     # --- Concentration Risk (Herfindahl Index) ---
@@ -139,8 +136,7 @@ def _compute_analytics():
         hhi = float(np.sum(weights ** 2))
         if hhi > 0:
             effective_positions = 1.0 / hhi
-    except Exception as e:
-        logger.warning("Analytics calc failed: %s", e)
+    except Exception:
         hhi = None
         effective_positions = None
 
@@ -152,8 +148,7 @@ def _compute_analytics():
         div_2y_ago = abs(dlt.total_transaction_amount(current_year - 2, "Dividend"))
         if div_2y_ago > 0 and div_last_year > 0:
             div_growth = (div_last_year / div_2y_ago - 1) * 100
-    except Exception as e:
-        logger.warning("Analytics calc failed: %s", e)
+    except Exception:
         div_growth = None
 
     # --- Value at Risk (95% historical) ---
@@ -161,8 +156,7 @@ def _compute_analytics():
     try:
         if portfolio_daily is not None and len(portfolio_daily) > 20:
             var_95 = float(np.percentile(portfolio_daily, 5)) * total_mv
-    except Exception as e:
-        logger.warning("Analytics calc failed: %s", e)
+    except Exception:
         var_95 = None
 
     metrics = {
@@ -258,8 +252,7 @@ def _build_fee_drag_section(df):
         if "date" in hist.columns:
             hist = hist.set_index("date")
         hist = 10 ** hist  # convert from log scale
-    except Exception as e:
-        logger.warning("Analytics calc failed: %s", e)
+    except Exception:
         return html.Div()
 
     # Map position symbols to historical columns
@@ -466,8 +459,7 @@ def _build_benchmark_section():
         if "date" in hist.columns:
             hist = hist.set_index("date")
         hist = 10 ** hist
-    except Exception as e:
-        logger.warning("Analytics calc failed: %s", e)
+    except Exception:
         return html.Div()
 
     if hist.empty or hist.shape[1] < 2:
@@ -514,6 +506,40 @@ def _build_benchmark_section():
                          'width': 2, 'dash': 'dash'},
             })
 
+    # Blended benchmark overlay
+    blended_series = None
+    try:
+        blend_cfg = config.BLENDED_BENCHMARK
+        if blend_cfg and not hist.empty:
+            start_date = str(hist.index[0])[:10]
+            blend_tickers = list(blend_cfg.keys())
+            blend_data = yf.download(blend_tickers, start=start_date, auto_adjust=True)
+            if not blend_data.empty:
+                if len(blend_tickers) == 1:
+                    close = blend_data[['Close']].copy()
+                    close.columns = blend_tickers
+                else:
+                    close = blend_data['Close']
+                close = close.sort_index().ffill()
+                first_vals = close.apply(lambda s: s.dropna().iloc[0] if not s.dropna().empty else np.nan)
+                norm_blend = (close / first_vals) * 100
+                blended = pd.Series(0.0, index=norm_blend.index)
+                for tkr, weight in blend_cfg.items():
+                    if tkr in norm_blend.columns:
+                        blended += norm_blend[tkr].fillna(method='ffill').fillna(100) * weight
+                blended_series = blended.dropna()
+                if not blended_series.empty:
+                    traces.append({
+                        'x': blended_series.index.strftime('%Y-%m-%d').tolist(),
+                        'y': blended_series.round(2).tolist(),
+                        'type': 'scatter',
+                        'mode': 'lines',
+                        'name': config.BLENDED_BENCHMARK_NAME,
+                        'line': {'color': '#FF9500', 'width': 2.5, 'dash': 'dashdot'},
+                    })
+    except Exception:
+        blended_series = None
+
     # Individual holdings as faint lines
     for col in holding_cols:
         series = normalized[col].dropna()
@@ -556,6 +582,17 @@ def _build_benchmark_section():
             alpha_kpis.append(
                 Styles.kpiboxes(f"Alpha vs {label}", f"{alpha:+.1f}%", color)
             )
+
+    # Blended benchmark alpha
+    if blended_series is not None and not blended_series.empty:
+        blend_final = blended_series.iloc[-1]
+        blend_return = blend_final - 100
+        blend_alpha = portfolio_return - blend_return
+        blend_color = Styles.strongGreen if blend_alpha >= 0 else Styles.strongRed
+        alpha_kpis.append(
+            Styles.kpiboxes(f"Alpha vs {config.BLENDED_BENCHMARK_NAME}",
+                            f"{blend_alpha:+.1f}%", blend_color)
+        )
 
     alpha_kpis.insert(0, Styles.kpiboxes(
         "Portfolio Return", f"{portfolio_return:+.1f}%",
@@ -604,8 +641,7 @@ def _build_correlation_heatmap():
         hist = 10 ** hist
         daily_returns = hist.pct_change(fill_method=None).dropna()
         corr = daily_returns.corr()
-    except Exception as e:
-        logger.warning("Analytics calc failed: %s", e)
+    except Exception:
         return html.Div()
 
     if corr.empty:
@@ -641,7 +677,7 @@ def _build_sector_treemap(df):
         return html.Div()
 
     df = df.copy()
-    df["sector"] = df["symbol"].map(config.get_sector).fillna("Other")
+    df["sector"] = df["symbol"].map(config.SECTOR_MAP).fillna("Other")
 
     labels = ["Portfolio"] + df["sector"].unique().tolist() + df["symbol"].tolist()
     parents = [""] + ["Portfolio"] * df["sector"].nunique() + df["sector"].tolist()
@@ -825,8 +861,7 @@ def _build_portfolio_vs_cost_basis():
         portfolio_value = portfolio_value.dropna()
         if portfolio_value.empty:
             return html.Div()
-    except Exception as e:
-        logger.warning("Analytics calc failed: %s", e)
+    except Exception:
         return html.Div()
 
     # Build cost basis time series (step function)
@@ -1009,8 +1044,7 @@ def _build_risk_contribution(df):
             hist = hist.set_index("date")
         hist = 10 ** hist
         daily_returns = hist.pct_change(fill_method=None).dropna()
-    except Exception as e:
-        logger.warning("Analytics calc failed: %s", e)
+    except Exception:
         return html.Div()
 
     # Match holdings to historical columns
@@ -1080,8 +1114,7 @@ def _build_beta_chart(portfolio_daily):
             hist = hist.set_index("date")
         hist = 10 ** hist
         daily_returns = hist.pct_change(fill_method=None).dropna()
-    except Exception as e:
-        logger.warning("Analytics calc failed: %s", e)
+    except Exception:
         return html.Div()
 
     # Find SPY column
@@ -1159,8 +1192,7 @@ def _build_efficient_frontier(df):
             hist = hist.set_index("date")
         hist = 10 ** hist
         daily_returns = hist.pct_change(fill_method=None).dropna()
-    except Exception as e:
-        logger.warning("Analytics calc failed: %s", e)
+    except Exception:
         return html.Div()
 
     # Match holdings

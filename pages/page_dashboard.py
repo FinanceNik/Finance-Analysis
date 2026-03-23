@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 from dash import dcc, html
+import yfinance as yf
 import Styles
 import config
 import dataLoadPositions as dlp
@@ -37,7 +38,7 @@ def _build_allocation_donut():
         return {
             'data': [],
             'layout': Styles.graph_layout(
-                title='',
+                title='Portfolio Allocation',
                 annotations=[{
                     'text': 'No data', 'showarrow': False,
                     'font': {'size': 14}
@@ -56,7 +57,7 @@ def _build_allocation_donut():
             'marker': {'colors': Styles.purple_list[:len(alloc)]},
         }],
         'layout': Styles.graph_layout(
-            title='',
+            title='Portfolio Allocation',
             showlegend=False,
             margin={'t': 40, 'b': 20, 'l': 20, 'r': 20},
         ),
@@ -73,7 +74,7 @@ def _build_dividend_sparkline():
         return {
             'data': [],
             'layout': Styles.graph_layout(
-                title='',
+                title='Monthly Dividends',
                 annotations=[{
                     'text': 'No data', 'showarrow': False,
                     'font': {'size': 14}
@@ -103,7 +104,7 @@ def _build_dividend_sparkline():
             },
         ],
         'layout': Styles.graph_layout(
-            title='',
+            title='Monthly Dividends',
             barmode='group',
             showlegend=True,
             legend={'orientation': 'h', 'y': -0.15, 'x': 0.5, 'xanchor': 'center'},
@@ -120,7 +121,7 @@ def _build_top_movers():
         return {
             'data': [],
             'layout': Styles.graph_layout(
-                title='',
+                title='Top Movers',
                 annotations=[{
                     'text': 'No data', 'showarrow': False,
                     'font': {'size': 14}
@@ -154,7 +155,7 @@ def _build_top_movers():
             'textposition': 'outside',
         }],
         'layout': Styles.graph_layout(
-            title='',
+            title='Top Movers (Unrealized P&L)',
             margin={'t': 40, 'b': 30, 'l': 100, 'r': 60},
             xaxis={'title': ''},
             yaxis={'title': ''},
@@ -222,7 +223,7 @@ def _build_performance_chart():
         return {
             'data': [],
             'layout': Styles.graph_layout(
-                title='',
+                title='Performance Overview',
                 annotations=[{
                     'text': 'No historical data available',
                     'showarrow': False, 'font': {'size': 14}
@@ -236,7 +237,7 @@ def _build_performance_chart():
     if hist.empty:
         return {
             'data': [],
-            'layout': Styles.graph_layout(title=''),
+            'layout': Styles.graph_layout(title='Performance Overview'),
         }
 
     # Apply 10**values transform (data is stored in log scale)
@@ -266,64 +267,15 @@ def _build_performance_chart():
     holding_cols = [c for c in data_cols if c not in bench_tickers]
     bench_cols = [c for c in bench_tickers if c in data_cols]
 
-    # ── Find common start date across all holdings ──
-    # Use the latest first-valid-date so all series start from the same point
-    first_valid_dates = {}
-    for col in holding_cols:
-        valid = price_data[col].dropna()
-        if not valid.empty:
-            first_valid_dates[col] = valid.index[0]
-
-    if first_valid_dates:
-        common_start = max(first_valid_dates.values())
-    else:
-        common_start = price_data.index[0]
-
-    # Truncate all data to start from the common date
-    price_data = price_data.loc[common_start:]
-    dates = price_data.index.tolist()
-
-    # Normalize to 100 from the common start date for each series
+    # Normalize to 100 at the first valid value for each series
     first_valid = price_data.apply(lambda s: s.dropna().iloc[0] if not s.dropna().empty else np.nan)
     normalized = (price_data / first_valid) * 100
 
-    # ── Value-weighted portfolio line ──
-    # Compute weights from current positions (market_value / total)
-    positions_df = dlp.fetch_data()
-    weights = {}
-    if not positions_df.empty and 'total_value' in positions_df.columns and 'symbol' in positions_df.columns:
-        total_mv = positions_df['total_value'].sum()
-        if total_mv > 0:
-            for _, row in positions_df.iterrows():
-                broker_sym = row['symbol']
-                ticker = sym_to_ticker.get(broker_sym, broker_sym)
-                if ticker in holding_cols:
-                    w = row['total_value'] / total_mv
-                    # Accumulate in case multiple rows map to same ticker
-                    weights[ticker] = weights.get(ticker, 0) + w
-
-    if weights:
-        # Build weighted portfolio return series
-        weighted_cols = [c for c in holding_cols if c in weights and c in normalized.columns]
-        if weighted_cols:
-            # Re-normalize weights to sum to 1 among available holdings
-            w_total = sum(weights[c] for c in weighted_cols)
-            if w_total > 0:
-                norm_weights = {c: weights[c] / w_total for c in weighted_cols}
-                portfolio_avg = sum(
-                    normalized[c].ffill() * norm_weights[c]
-                    for c in weighted_cols
-                ).dropna()
-            else:
-                portfolio_avg = normalized[holding_cols].mean(axis=1).dropna() if holding_cols else normalized.mean(axis=1).dropna()
-        else:
-            portfolio_avg = normalized[holding_cols].mean(axis=1).dropna() if holding_cols else normalized.mean(axis=1).dropna()
+    # Portfolio average from holdings only (exclude benchmarks)
+    if holding_cols:
+        portfolio_avg = normalized[holding_cols].mean(axis=1).dropna()
     else:
-        # Fallback: equal-weight average from common start
-        if holding_cols:
-            portfolio_avg = normalized[holding_cols].mean(axis=1).dropna()
-        else:
-            portfolio_avg = normalized.mean(axis=1).dropna()
+        portfolio_avg = normalized.mean(axis=1).dropna()
 
     traces = [{
         'x': dates,
@@ -351,6 +303,43 @@ def _build_performance_chart():
                          'width': 2, 'dash': 'dash'},
             })
 
+    # Blended benchmark overlay
+    try:
+        blend_cfg = config.BLENDED_BENCHMARK
+        if blend_cfg and dates:
+            start_date = str(dates[0])[:10] if dates else None
+            if start_date:
+                blend_tickers = list(blend_cfg.keys())
+                blend_data = yf.download(blend_tickers, start=start_date, auto_adjust=True)
+                if not blend_data.empty:
+                    # Extract 'Close' prices; handle single vs multi-ticker
+                    if len(blend_tickers) == 1:
+                        close = blend_data[['Close']].copy()
+                        close.columns = blend_tickers
+                    else:
+                        close = blend_data['Close']
+                    close = close.sort_index().ffill()
+                    # Normalize each component to 100 at its first valid value
+                    first_vals = close.apply(lambda s: s.dropna().iloc[0] if not s.dropna().empty else np.nan)
+                    norm_blend = (close / first_vals) * 100
+                    # Compute weighted blend
+                    blended = pd.Series(0.0, index=norm_blend.index)
+                    for tkr, weight in blend_cfg.items():
+                        if tkr in norm_blend.columns:
+                            blended += norm_blend[tkr].fillna(method='ffill').fillna(100) * weight
+                    blended = blended.dropna()
+                    if not blended.empty:
+                        traces.append({
+                            'x': blended.index.strftime('%Y-%m-%d').tolist(),
+                            'y': blended.round(2).tolist(),
+                            'type': 'scatter',
+                            'mode': 'lines',
+                            'name': config.BLENDED_BENCHMARK_NAME,
+                            'line': {'color': '#FF9500', 'width': 2.5, 'dash': 'dashdot'},
+                        })
+    except Exception:
+        pass  # Blended benchmark is best-effort; don't break the chart
+
     # Individual holdings as faint lines
     for col in holding_cols:
         series = normalized[col].dropna()
@@ -370,7 +359,7 @@ def _build_performance_chart():
     return {
         'data': traces,
         'layout': Styles.graph_layout(
-            title='',
+            title='Portfolio vs Benchmarks (Normalized to 100)',
             xaxis={'title': 'Date', 'type': 'date' if 'date' in hist.columns else 'linear'},
             yaxis={'title': 'Indexed Value'},
             hovermode='x unified',
@@ -454,7 +443,6 @@ def layout():
             # ── Row 2: Allocation donut + Dividend sparkline ──
             html.Div([
                 html.Div([
-                    html.H5("Portfolio Allocation"),
                     dcc.Graph(
                         id='dash-allocation-donut',
                         figure=_build_allocation_donut(),
@@ -462,7 +450,6 @@ def layout():
                     ),
                 ], className="card"),
                 html.Div([
-                    html.H5("Monthly Dividends"),
                     dcc.Graph(
                         id='dash-dividend-sparkline',
                         figure=_build_dividend_sparkline(),
@@ -474,7 +461,6 @@ def layout():
             # ── Row 3: Top Movers + FIRE Progress ──
             html.Div([
                 html.Div([
-                    html.H5("Top Movers (Unrealized P&L)"),
                     dcc.Graph(
                         id='dash-top-movers',
                         figure=_build_top_movers(),
@@ -488,7 +474,6 @@ def layout():
 
             # ── Row 4: Performance Overview (full width) ──
             html.Div([
-                html.H5("Portfolio vs Benchmarks (Normalized to 100)"),
                 dcc.Graph(
                     id='dash-performance-chart',
                     figure=_build_performance_chart(),
