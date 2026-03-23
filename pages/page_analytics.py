@@ -631,13 +631,14 @@ def _build_correlation_heatmap():
         if "date" in hist.columns:
             hist = hist.set_index("date")
         # hist is already in raw price scale
-        daily_returns = hist.pct_change(fill_method=None).dropna()
-        corr = daily_returns.corr()
-    except Exception:
-        return html.Div()
+        daily_returns = hist.pct_change(fill_method=None)
+        corr = daily_returns.corr(min_periods=20)  # pairwise, require 20+ common dates
+    except Exception as e:
+        logger.warning("Correlation heatmap failed: %s", e)
+        return Styles.empty_state("Could not compute correlations", "📊")
 
-    if corr.empty:
-        return html.Div()
+    if corr.empty or corr.shape[0] < 2:
+        return Styles.empty_state("Insufficient data for correlation matrix", "📊")
 
     chart = {
         'data': [{
@@ -666,10 +667,10 @@ def _build_correlation_heatmap():
 def _build_sector_treemap(df):
     """Build a treemap showing portfolio allocation by sector."""
     if df.empty or 'market_value' not in df.columns:
-        return html.Div()
+        return Styles.empty_state("No position data for sector treemap", "📊")
 
     df = df.copy()
-    df["sector"] = df["symbol"].map(config.SECTOR_MAP).fillna("Other")
+    df["sector"] = df["symbol"].map(config.get_sector).fillna("Other")
 
     labels = ["Portfolio"] + df["sector"].unique().tolist() + df["symbol"].tolist()
     parents = [""] + ["Portfolio"] * df["sector"].nunique() + df["sector"].tolist()
@@ -698,10 +699,12 @@ def _build_sector_treemap(df):
 
 def _build_geography_treemap(df):
     """Build a treemap showing portfolio allocation by geography."""
-    if df.empty or 'geography' not in df.columns or 'market_value' not in df.columns:
-        return html.Div()
+    if df.empty or 'market_value' not in df.columns:
+        return Styles.empty_state("No position data for geography treemap", "🌍")
 
     df = df.copy()
+    if "geography" not in df.columns:
+        df["geography"] = df["symbol"].map(config.get_geography).fillna("Other")
 
     labels = ["Portfolio"] + df["geography"].unique().tolist() + df["symbol"].tolist()
     parents = [""] + ["Portfolio"] * df["geography"].nunique() + df["geography"].tolist()
