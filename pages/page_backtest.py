@@ -68,6 +68,9 @@ def layout():
                       "padding": "10px 20px", "verticalAlign": "top"}),
         ], style={"marginBottom": "20px"}),
 
+        # --- Auto-run trigger ---
+        dcc.Interval(id="bt-auto-run", interval=500, max_intervals=1),
+
         # --- Results area ---
         dcc.Loading(
             html.Div(id="bt-results", children=html.Div([
@@ -367,19 +370,21 @@ def register_callbacks(app):
         [Output("bt-results", "children"),
          Output("bt-sensitivity", "value")],
         [Input("bt-run-btn", "n_clicks"),
-         Input("bt-optimize-btn", "n_clicks")],
+         Input("bt-optimize-btn", "n_clicks"),
+         Input("bt-auto-run", "n_intervals")],
         [State("bt-sensitivity", "value"),
          State("bt-target", "value")],
         prevent_initial_call=True,
     )
-    def update_backtest(run_clicks, opt_clicks, sensitivity, target):
+    def update_backtest(run_clicks, opt_clicks, auto_run, sensitivity, target):
         import logging
         logger = logging.getLogger(__name__)
         try:
             ctx = dash.callback_context
             if not ctx.triggered:
-                return dash.no_update, dash.no_update
-            trigger = ctx.triggered[0]["prop_id"]
+                trigger = "bt-auto-run"
+            else:
+                trigger = ctx.triggered[0]["prop_id"]
 
             df = bte.load_and_prepare()
             if df.empty:
